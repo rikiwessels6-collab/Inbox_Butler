@@ -49,9 +49,9 @@ public enum DateEventExtractor {
     /// True if the matched text starts with, or is directly preceded by, a deadline word.
     static func isDeadlinePhrase(_ matched: String, before: String) -> Bool {
         let lead = matched.trimmingCharacters(in: .whitespaces).lowercased()
-        if lead.range(of: "^\\(deadlineWords)\\b", options: .regularExpression) != nil { return true }
+        if lead.range(of: "^\(deadlineWords)\\b", options: .regularExpression) != nil { return true }
         let context = String(before.suffix(15)).lowercased()
-        return context.range(of: "\\b\\(deadlineWords)[\\s:]*$", options: .regularExpression) != nil
+        return context.range(of: "\\b\(deadlineWords)[\\s:]*$", options: .regularExpression) != nil
     }
 
     /// The line containing the match, trimmed to a readable length.
