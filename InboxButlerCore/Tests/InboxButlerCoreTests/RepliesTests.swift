@@ -77,6 +77,24 @@ final class RepliesTests: XCTestCase {
         XCTAssertFalse(BulkMailDetector.isBulk(fromAddress: "sam@b.com", hasListUnsubscribe: false, hasListID: false, precedence: nil))
     }
 
+    func testMorningBriefAndSpokenSummaryAndRedaction() {
+        XCTAssertEqual(MorningBrief.text(priorityUnread: 2, needsReply: 1, eventsToday: 0).body, "2 priority emails, 1 reply waiting.")
+        XCTAssertEqual(MorningBrief.text(priorityUnread: 0, needsReply: 0, eventsToday: 0).body, "Nothing urgent. Enjoy your day.")
+
+        let a = MailAccount(id: acc, kind: .gmail, emailAddress: "me@x.com", label: "Work", colorIndex: 0)
+        var vip = msg("v", from: "sam@work.com", thread: "t", daysAgo: 0.1, subject: "Contract")
+        vip.awaitingReply = true
+        let prio = [PrioritySender(input: "sam@work.com")!]
+        let open = WidgetSnapshot.make(messages: [vip], accounts: [a], priority: prio)
+        XCTAssertEqual(open.urgentEmails.first?.subject, "Contract")
+        XCTAssertTrue(open.spokenSummary.contains("Contract"))
+        XCTAssertTrue(open.spokenSummary.contains("1 reply waiting"))
+        let hidden = WidgetSnapshot.make(messages: [vip], accounts: [a], priority: prio, redact: true)
+        XCTAssertEqual(hidden.urgentEmails.first?.subject, "New message")
+        XCTAssertFalse(hidden.spokenSummary.contains("Contract"))
+        XCTAssertFalse(hidden.spokenSummary.contains("sam"))
+    }
+
     func testSyncEngineReturnsSentMail() async {
         let a = MailAccount(kind: .gmail, emailAddress: "a@b.c", label: "A", colorIndex: 0)
         let engine = SyncEngine(providers: [SentMock(account: a)])

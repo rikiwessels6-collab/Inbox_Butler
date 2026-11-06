@@ -30,11 +30,15 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public var repliesWaiting: Int
     /// Unread mail from priority senders (may exceed the items listed).
     public var priorityUnreadCount: Int
+    /// True when sender/subject were hidden for privacy (counts only).
+    public var isRedacted: Bool
     public var generatedAt: Date
 
     public init(urgentEmails: [EmailItem] = [], todaysEvents: [EventItem] = [],
-                repliesWaiting: Int = 0, priorityUnreadCount: Int = 0, generatedAt: Date = Date()) {
+                repliesWaiting: Int = 0, priorityUnreadCount: Int = 0, isRedacted: Bool = false,
+                generatedAt: Date = Date()) {
         self.priorityUnreadCount = priorityUnreadCount
+        self.isRedacted = isRedacted
         self.urgentEmails = urgentEmails
         self.todaysEvents = todaysEvents
         self.repliesWaiting = repliesWaiting
@@ -48,6 +52,26 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
 }
 
 extension WidgetSnapshot {
+    /// One short paragraph for Siri / Shortcuts ("What's urgent?").
+    public var spokenSummary: String {
+        func plural(_ n: Int, _ word: String) -> String { "\(n) \(word)\(n == 1 ? "" : "s")" }
+        var parts: [String] = []
+        if priorityUnreadCount == 0 && urgentEmails.isEmpty {
+            parts.append("Nothing urgent in your inbox.")
+        } else {
+            parts.append("You have \(plural(max(priorityUnreadCount, urgentEmails.count), "priority email")).")
+            if !isRedacted, let top = urgentEmails.first { parts.append("Top: \(top.sender), \(top.subject).") }
+        }
+        if repliesWaiting > 0 { parts.append("\(plural(repliesWaiting, "reply")) waiting on you.".replacingOccurrences(of: "replys", with: "replies")) }
+        if !isRedacted, let event = todaysEvents.first {
+            let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none
+            parts.append("Next today: \(event.title) at \(f.string(from: event.start)).")
+        } else if !todaysEvents.isEmpty {
+            parts.append("\(plural(todaysEvents.count, "event")) today.")
+        }
+        return parts.joined(separator: " ")
+    }
+
     /// Builds the widget content from the current inbox.
     /// - Urgent: unread AND (from a priority sender OR importance >= 0.7).
     ///   Priority senders first, then by importance, then newest (max 5).
@@ -56,7 +80,7 @@ extension WidgetSnapshot {
     public static func make(messages: [MailMessage], accounts: [MailAccount],
                             events: [EventProposal] = [], priority: [PrioritySender] = [],
                             now: Date = Date(),
-                            calendar: Calendar = .current) -> WidgetSnapshot {
+                            redact: Bool = false, calendar: Calendar = .current) -> WidgetSnapshot {
         let labels = Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0.label) })
         let unread = messages.filter { !$0.isRead }
         func isPriority(_ m: MailMessage) -> Bool { priority.contains(address: m.from.address) }
@@ -69,17 +93,19 @@ extension WidgetSnapshot {
                 return $0.receivedAt > $1.receivedAt
             }
             .prefix(5)
-            .map { EmailItem(id: $0.id, sender: $0.from.display, subject: $0.subject,
+            .map { EmailItem(id: $0.id,
+                             sender: redact ? "Priority sender" : $0.from.display,
+                             subject: redact ? "New message" : $0.subject,
                              accountLabel: labels[$0.accountID] ?? "",
                              isPriority: isPriority($0), receivedAt: $0.receivedAt) }
         let today = events
             .filter { $0.status != .dismissed && calendar.isDate($0.start, inSameDayAs: now) }
             .sorted { $0.start < $1.start }
-            .map { EventItem(id: $0.id.uuidString, title: $0.title, start: $0.start) }
+            .map { EventItem(id: $0.id.uuidString, title: redact ? "Event" : $0.title, start: $0.start) }
         return WidgetSnapshot(urgentEmails: Array(urgent), todaysEvents: today,
                               repliesWaiting: messages.filter(\.awaitingReply).count,
                               priorityUnreadCount: unread.filter(isPriority).count,
-                              generatedAt: now)
+                              isRedacted: redact, generatedAt: now)
     }
 }
 
