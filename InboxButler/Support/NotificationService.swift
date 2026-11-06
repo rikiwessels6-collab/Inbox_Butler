@@ -17,16 +17,42 @@ struct NotificationService {
     }
 
     /// Shows: title = sender, subtitle = account, body = subject.
-    func post(_ n: PlannedNotification) async {
+    /// `urgent` notifications (priority senders) are Time Sensitive when enabled, so they
+    /// can break through a Focus mode; everything else is a normal notification.
+    func post(_ n: PlannedNotification, urgent: Bool = true) async {
         let content = UNMutableNotificationContent()
         content.title = n.title
         content.subtitle = n.subtitle
         content.body = n.body
         content.sound = .default
+        if urgent && AppSettings.bool(AppSettings.timeSensitiveKey, default: true) {
+            content.interruptionLevel = .timeSensitive
+        }
         content.threadIdentifier = n.subtitle          // groups by account
         content.userInfo = ["messageID": n.id]
         let request = UNNotificationRequest(identifier: n.id, content: content, trigger: nil)
         try? await center.add(request)
+    }
+}
+
+extension NotificationService {
+    private static let briefID = "morning-brief"
+
+    func cancelMorningBrief() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.briefID])
+    }
+
+    /// Replaces the pending brief with one that fires once at `date`.
+    func scheduleMorningBrief(at date: Date, title: String, body: String) async {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [Self.briefID])
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
+        try? await center.add(UNNotificationRequest(identifier: Self.briefID, content: content, trigger: trigger))
     }
 }
 

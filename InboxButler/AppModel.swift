@@ -27,6 +27,12 @@ final class AppModel {
     static let shared = AppModel()
 
     private(set) var prioritySenders: [PrioritySender] = []
+    /// Recently sent mail (reply tracking, suggestions).
+    private(set) var sent: [MailMessage] = []
+    /// Mail you sent that nobody has answered yet.
+    private(set) var waitingOnOthers: [MailMessage] = []
+    /// People you might want as priority senders, based on your own habits.
+    private(set) var suggestions: [SenderSuggestion] = []
     private(set) var accounts: [MailAccount] = []
     private(set) var messages: [MailMessage] = []
     private(set) var errors: [UUID: String] = [:]
@@ -150,6 +156,7 @@ final class AppModel {
         defer { isRefreshing = false }
         let result = await engine.refresh()
         errors = result.errors
+        if !result.sent.isEmpty { sent = result.sent }
         if usingDemoData {
             messages = result.messages
         } else if let cache {
@@ -163,9 +170,39 @@ final class AppModel {
         } else {
             messages = result.messages
         }
+        applyReplyTracking()
         publishWidgetSnapshot()
         await notifyForNewMail()
+        await notifyFollowUps()
         await scanPriorityMailForEvents()
+        await rescheduleBrief()
+    }
+
+    // MARK: Reply tracking and suggestions
+
+    /// Works out (on-device) who is waiting on you and whom you are waiting on.
+    /// Skipped when there is no sent mail yet, so an offline start doesn't flag everything.
+    private func applyReplyTracking() {
+        guard !usingDemoData, !sent.isEmpty else { return }
+        let me = Set(accounts.map { $0.emailAddress.lowercased() })
+        let status = ReplyTracker.analyze(inbox: messages, sent: sent, myAddresses: me)
+        for i in messages.indices { messages[i].awaitingReply = status.awaitingMyReply.contains(messages[i].id) }
+        waitingOnOthers = status.awaitingTheirReply
+        let dismissed = Set(UserDefaults.standard.stringArray(forKey: AppSettings.dismissedSuggestionsKey) ?? [])
+        suggestions = SuggestedSenders.suggest(sent: sent, inbox: messages, existing: prioritySenders, myAddresses: me)
+            .filter { !dismissed.contains($0.address) }
+    }
+
+    func acceptSuggestion(_ suggestion: SenderSuggestion) {
+        addPrioritySender(suggestion.address)
+        suggestions.removeAll { $0.address == suggestion.address }
+    }
+
+    func dismissSuggestion(_ suggestion: SenderSuggestion) {
+        var dismissed = UserDefaults.standard.stringArray(forKey: AppSettings.dismissedSuggestionsKey) ?? []
+        dismissed.append(suggestion.address)
+        UserDefaults.standard.set(dismissed, forKey: AppSettings.dismissedSuggestionsKey)
+        suggestions.removeAll { $0.address == suggestion.address }
     }
 
     /// Local-only: marks read in the app. Never changes the real mailbox.
@@ -177,10 +214,11 @@ final class AppModel {
 
     /// Writes the small summary the widget reads (App Group file) and asks
     /// WidgetKit to refresh. Contains sender/subject text; see README privacy notes.
-    private func publishWidgetSnapshot() {
+    func publishWidgetSnapshot() {
         let snapshot = WidgetSnapshot.make(messages: messages, accounts: accounts,
                                            events: usingDemoData ? [] : proposalStore.all(),
-                                           priority: prioritySenders)
+                                           priority: prioritySenders,
+                                           redact: AppSettings.bool(AppSettings.redactKey, default: false))
         if WidgetSnapshotStore().save(snapshot) {
             WidgetCenter.shared.reloadAllTimelines()
         }
@@ -286,6 +324,35 @@ final class AppModel {
                                                 priority: prioritySenders,
                                                 alreadyNotified: notified.union(plan.map(\.id))).map(\.id))
         notifiedStore.add(messages.map(\.id).filter { !held.contains($0) })
+    }
+
+    /// Reminds you about mail you sent to a priority sender that has had no reply.
+    private func notifyFollowUps() async {
+        guard !usingDemoData, AppSettings.bool(AppSettings.followUpsKey, default: true),
+              let notified = notifiedStore.load(), await notifier.status() == .authorized else { return }
+        let plan = FollowUpPlanner.plan(awaiting: waitingOnOthers, accounts: accounts,
+                                        priority: prioritySenders, alreadyNotified: notified)
+        for item in plan { await notifier.post(item, urgent: false) }
+        notifiedStore.add(plan.map(\.id))
+    }
+
+    /// Schedules (or cancels) the optional 8am summary. Its text is a snapshot from the
+    /// last refresh, so it can be slightly stale if the app hasn't updated overnight.
+    func rescheduleBrief() async {
+        guard AppSettings.bool(AppSettings.briefKey, default: false), await notifier.status() == .authorized else {
+            notifier.cancelMorningBrief()
+            return
+        }
+        let calendar = Calendar.current
+        guard let next = calendar.nextDate(after: Date(), matching: DateComponents(hour: 8, minute: 0),
+                                           matchingPolicy: .nextTime) else { return }
+        let events = usingDemoData ? [] : proposalStore.all().filter {
+            $0.status != .dismissed && calendar.isDate($0.start, inSameDayAs: next)
+        }
+        let text = MorningBrief.text(priorityUnread: messages.filter { !$0.isRead && isPriority($0) }.count,
+                                     needsReply: messages.filter(\.awaitingReply).count,
+                                     eventsToday: events.count)
+        await notifier.scheduleMorningBrief(at: next, title: text.title, body: text.body)
     }
 
     func notificationStatus() async -> UNAuthorizationStatus { await notifier.status() }

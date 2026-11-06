@@ -16,7 +16,7 @@ developer.apple.com > Account > **Certificates, IDs & Profiles** > **Identifiers
    `group.com.boundarylineapps.InboxButler`.
 2. **+** > **App IDs** > App > description `Inbox Butler`, Bundle ID **Explicit**
    `com.boundarylineapps.InboxButler`. Under Capabilities tick **App Groups**, then
-   Configure and select the group above.
+   Configure and select the group above. Also tick **Time Sensitive Notifications**.
 3. Repeat for the widget: Bundle ID `com.boundarylineapps.InboxButler.Widget`, also with
    **App Groups** and the same group.
 

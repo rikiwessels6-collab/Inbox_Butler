@@ -34,10 +34,13 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.com.boundarylineapps.InboxButler
+        # Lets priority notifications break through Focus modes.
+        com.apple.developer.usernotifications.time-sensitive: true
     info:
       path: InboxButler/Info.plist
       properties:
         CFBundleDisplayName: Inbox Butler
+        NSFaceIDUsageDescription: Inbox Butler can ask for Face ID before opening, to keep your mail private.
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
