@@ -61,6 +61,19 @@ public struct GmailProvider: MailProvider {
         return MailPage(messages: result, nextCursor: nil)
     }
 
+    public func fetchBody(for message: MailMessage) async throws -> String {
+        let (data, status) = try await get("messages/\(message.providerMessageID)", query: [
+            .init(name: "format", value: "full"),
+            .init(name: "fields", value: Self.bodyFields)
+        ])
+        guard status == 200, let raw = try? JSONDecoder().decode(RawMessage.self, from: data) else {
+            throw MailProviderError.network("Gmail returned \(status) reading the message.")
+        }
+        if let plain = Self.firstBody(in: raw.payload, mime: "text/plain") { return plain }
+        if let html = Self.firstBody(in: raw.payload, mime: "text/html") { return HTMLText.strip(html) }
+        return message.snippet
+    }
+
     public func fetchAttachment(_ attachment: AttachmentInfo, in message: MailMessage) async throws -> Data {
         let (data, status) = try await get("messages/\(message.providerMessageID)/attachments/\(attachment.id)")
         guard status == 200, let body = try? JSONDecoder().decode(AttachmentBody.self, from: data),
@@ -77,6 +90,22 @@ public struct GmailProvider: MailProvider {
         "id,threadId,labelIds,snippet,internalDate," +
         "payload(headers,parts(filename,mimeType,body(attachmentId,size)," +
         "parts(filename,mimeType,body(attachmentId,size))))"
+
+    /// Body text only (up to 4 levels of nesting), no headers or attachment metadata.
+    private static let bodyFields =
+        "payload(mimeType,body(data),parts(mimeType,body(data),parts(mimeType,body(data)," +
+        "parts(mimeType,body(data),parts(mimeType,body(data))))))"
+
+    /// First part of the given MIME type that has inline data, decoded as UTF-8.
+    static func firstBody(in part: RawMessage.Part?, mime: String) -> String? {
+        guard let part else { return nil }
+        if part.mimeType?.lowercased() == mime, let encoded = part.body?.data,
+           let bytes = decodeBase64URL(encoded) {
+            return String(decoding: bytes, as: UTF8.self)
+        }
+        for child in part.parts ?? [] { if let found = firstBody(in: child, mime: mime) { return found } }
+        return nil
+    }
 
     private func fetchOne(_ id: String) async throws -> MailMessage? {
         let (data, status) = try await get("messages/\(id)", query: [
@@ -122,7 +151,7 @@ public struct GmailProvider: MailProvider {
 
     struct RawMessage: Decodable {
         struct Header: Decodable { let name: String; let value: String }
-        struct Body: Decodable { let attachmentId: String?; let size: Int? }
+        struct Body: Decodable { let attachmentId: String?; let size: Int?; let data: String? }
         struct Part: Decodable {
             let headers: [Header]?
             let filename: String?

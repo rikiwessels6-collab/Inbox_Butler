@@ -12,6 +12,9 @@ public struct IMAPProvider: MailProvider {
     public func fetchMessages(in mailbox: Mailbox, since cursor: SyncCursor?, limit: Int) async throws -> MailPage {
         throw MailProviderError.notImplemented("IMAP sync")
     }
+    public func fetchBody(for message: MailMessage) async throws -> String {
+        throw MailProviderError.notImplemented("IMAP message body")
+    }
     public func fetchAttachment(_ attachment: AttachmentInfo, in message: MailMessage) async throws -> Data {
         throw MailProviderError.notImplemented("IMAP attachments")
     }

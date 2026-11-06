@@ -4,10 +4,15 @@ import Foundation
 public struct MockMailProvider: MailProvider {
     public let account: MailAccount
     private let messages: [MailMessage]
+    private let bodies: [String: String]          // providerMessageID -> body text
+    private let attachmentData: [String: Data]    // attachment id -> bytes
 
-    public init(account: MailAccount, messages: [MailMessage]) {
+    public init(account: MailAccount, messages: [MailMessage],
+                bodies: [String: String] = [:], attachmentData: [String: Data] = [:]) {
         self.account = account
         self.messages = messages
+        self.bodies = bodies
+        self.attachmentData = attachmentData
     }
 
     public func authorize() async throws {}
@@ -18,7 +23,11 @@ public struct MockMailProvider: MailProvider {
         return MailPage(messages: Array(sorted.prefix(limit)), nextCursor: SyncCursor("mock"))
     }
 
+    public func fetchBody(for message: MailMessage) async throws -> String {
+        bodies[message.providerMessageID] ?? message.snippet
+    }
+
     public func fetchAttachment(_ attachment: AttachmentInfo, in message: MailMessage) async throws -> Data {
-        Data()
+        attachmentData[attachment.id] ?? Data()
     }
 }

@@ -51,6 +51,10 @@ public protocol MailProvider: Sendable {
     /// Fetch messages newer than `cursor` (or the latest `limit` if nil).
     func fetchMessages(in mailbox: Mailbox, since cursor: SyncCursor?, limit: Int) async throws -> MailPage
 
+    /// The message text (plain text; HTML is converted). Fetched on demand when a
+    /// message is opened or scanned, not during sync.
+    func fetchBody(for message: MailMessage) async throws -> String
+
     /// Download one attachment's bytes (on demand, not during sync).
     func fetchAttachment(_ attachment: AttachmentInfo, in message: MailMessage) async throws -> Data
 }
