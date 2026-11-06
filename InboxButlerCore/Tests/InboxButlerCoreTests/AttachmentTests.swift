@@ -153,4 +153,17 @@ final class AttachmentTests: XCTestCase {
         XCTAssertEqual(again[0].title, "Edited")
         XCTAssertEqual(store.all().count, 1)
     }
+
+    func testDeadlinePhrasesUseTheDeadlineDateNotToday() {
+        let future = Calendar.current.date(byAdding: .day, value: 20, to: ref)!
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "MMMM d, yyyy"
+        for phrase in ["Payment due", "Please confirm by", "Offer valid until"] {
+            let events = DateEventExtractor.events(in: "\(phrase) \(f.string(from: future)).", sourceMessageID: "m", referenceDate: ref)
+            XCTAssertEqual(events.count, 1, phrase)
+            if let e = events.first {
+                XCTAssertTrue(Calendar.current.isDate(e.start, inSameDayAs: future), "\(phrase) -> \(e.start)")
+                XCTAssertNil(e.end, phrase)
+            }
+        }
+    }
 }

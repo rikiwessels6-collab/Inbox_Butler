@@ -17,14 +17,23 @@ public enum DateEventExtractor {
         var seen = Set<String>()
 
         for match in detector.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
-            guard let date = match.date,
-                  date >= referenceDate.addingTimeInterval(-3_600), date <= horizon else { continue }
-
+            guard var date = match.date else { continue }
+            var duration = match.duration
             let matched = ns.substring(with: match.range)
+
+            // Deadline phrases ("due 26 Nov", "reply by Friday", "until 5pm Monday") come back
+            // from the detector as a range that STARTS NOW and ends on the deadline.
+            // The deadline is the end of that range, so use it as the date.
+            if duration > 0 && Self.isDeadlinePhrase(matched, before: ns.substring(to: match.range.location)) {
+                date = date.addingTimeInterval(duration)
+                duration = 0
+            }
+            guard date >= referenceDate.addingTimeInterval(-3_600), date <= horizon else { continue }
+
             let hasTime = matched.range(of: #"\d{1,2}[:.]\d{2}|\b\d{1,2}\s?(am|pm)\b|\bnoon\b|\bmidnight\b"#,
                                         options: [.regularExpression, .caseInsensitive]) != nil
             let sentence = sentence(around: match.range, in: ns)
-            let end: Date? = match.duration > 0 ? date.addingTimeInterval(match.duration) : nil
+            let end: Date? = duration > 0 ? date.addingTimeInterval(duration) : nil
             let evidence = fileLabel.map { "\($0): \(sentence)" } ?? sentence
 
             let proposal = EventProposal(sourceMessageID: sourceMessageID, title: sentence, start: date, end: end,
@@ -33,6 +42,16 @@ public enum DateEventExtractor {
             if out.count >= maxEvents { break }
         }
         return out
+    }
+
+    private static let deadlineWords = "(due|by|before|until|till|through|thru|deadline)"
+
+    /// True if the matched text starts with, or is directly preceded by, a deadline word.
+    static func isDeadlinePhrase(_ matched: String, before: String) -> Bool {
+        let lead = matched.trimmingCharacters(in: .whitespaces).lowercased()
+        if lead.range(of: "^\\(deadlineWords)\\b", options: .regularExpression) != nil { return true }
+        let context = String(before.suffix(15)).lowercased()
+        return context.range(of: "\\b\\(deadlineWords)[\\s:]*$", options: .regularExpression) != nil
     }
 
     /// The line containing the match, trimmed to a readable length.
