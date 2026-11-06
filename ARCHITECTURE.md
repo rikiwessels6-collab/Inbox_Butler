@@ -39,8 +39,8 @@ InboxButlerWidget  (widget extension; reads WidgetSnapshot)
 | Accounts | Account list, sign-in flows, credentials in Keychain | Gmail sign-in (PKCE, read-only) done; others stubbed |
 | Sync | Per-account sync, merge, dedupe, errors per account, SwiftData offline cache | Done for Gmail (re-reads newest 50; historyId incremental sync later) |
 | Inbox | Unified list, account badge, read state | UI done on mock data |
-| Attachments | Download on demand; PDF (PDFKit), images (Vision OCR), `.ics`, Word (`.docx` is zipped XML) text extraction | Planned |
-| Calendar | Turn extracted dates into `EventProposal`; EventKit write only after user confirms | Protocol only |
+| Attachments | Download on demand; PDF (PDFKit), images (Vision OCR), `.ics`, Word `.docx` text extraction; `fetchBody` for message text | Done (on-device, no AI) |
+| Calendar | Turn extracted dates into `EventProposal`; EventKit write only after user confirms | Done: `ICSParser`, `DateEventExtractor`, `EventProposalStore`, write-only `EventKitCalendarWriter` |
 | StyleProfile | Learn tone, greeting/sign-off, length, phrases from Sent mail, on-device; store locally | Model + store only |
 | Drafts | Generate reply with style profile; user reviews; never auto-sent | Model only |
 | Widget | Snapshot written by app, read by WidgetKit extension | Snapshot builder, app publisher and widget done (mock data) |

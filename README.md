@@ -65,6 +65,31 @@ source folders. `project.yml` documents the exact settings and entitlements.
 8. Privacy: `PrivacyInfo.xcprivacy` is included (no tracking, no collected data). If an
    AI proxy is added, revisit it and the App Privacy answers.
 
+## Attachments and calendar events
+
+Open a message and the app reads it **on your device**:
+- the full message text (plain text, or HTML converted to text);
+- **PDFs** (text layer; scanned PDFs are read with on-device OCR, first 3 pages),
+  **images** (on-device OCR), **Word `.docx`**, and **calendar invites (`.ics`)**;
+- up to 5 attachments per message, each up to 15 MB. Old `.doc` files are not supported.
+
+Dates found become **suggested events** with the sentence they came from. You can
+edit the title and time, then tap **Add to Calendar** or **Dismiss**. Nothing is added
+without your tap, and a dismissed or added event never comes back.
+
+- **Write-only calendar access:** iOS lets the app add events but not read or change
+  anything already in your calendar.
+- New unread mail from **priority senders** is scanned automatically (max 5 per refresh)
+  so today's events can reach the widget. Other mail is scanned only when you open it.
+- Attachments are downloaded from your own mail server, scanned in memory and thrown away.
+
+**Known limits** (it is a heuristic until the AI layer is added):
+- Date finding uses Apple's date detector. It can miss events or suggest wrong ones, so
+  always check the evidence line.
+- Relative dates ("tomorrow", "next Friday") are worked out from *today*, not from the
+  day the email was sent, so they can be wrong on older mail.
+- Recurring invites propose only the first occurrence.
+
 ## Priority senders and notifications
 
 - You choose the senders (a full address, or `@company.com` for everyone at a
@@ -88,6 +113,8 @@ source folders. `project.yml` documents the exact settings and entitlements.
 |---|---|---|
 | Mail content (headers, bodies, attachments) | Only to your own mail provider | Fetched over TLS from Google, Microsoft, iCloud or your IMAP server. Nothing is copied anywhere else. |
 | OAuth tokens, app passwords | **No** | iOS Keychain only. Never written to disk, logs or the App Group. |
+| Attachments (PDF, images, docs) | Only from your mail server to the device | Downloaded, read with on-device PDFKit / Vision OCR, then discarded. |
+| Calendar events you add | **No** | Written to your on-device calendar with write-only access. |
 | Local mail cache, style profile, widget snapshot | **No** | App sandbox / App Group container on the device. |
 | Style profile (learned from sent mail) | **No** | Computed on-device and stored locally. |
 | Summaries, importance, date extraction, drafting | **Depends on the AI choice (undecided)** | Option A, Apple Foundation Models: nothing leaves the device. Option B, backend proxy: the text sent for each request leaves the device and goes to your proxy and then the model provider. Not implemented until you choose. |
