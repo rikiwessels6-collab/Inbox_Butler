@@ -6,13 +6,16 @@ public struct MockMailProvider: MailProvider {
     private let messages: [MailMessage]
     private let bodies: [String: String]          // providerMessageID -> body text
     private let attachmentData: [String: Data]    // attachment id -> bytes
+    private let htmlBodies: [String: String]      // providerMessageID -> HTML
 
     public init(account: MailAccount, messages: [MailMessage],
-                bodies: [String: String] = [:], attachmentData: [String: Data] = [:]) {
+                bodies: [String: String] = [:], attachmentData: [String: Data] = [:],
+                htmlBodies: [String: String] = [:]) {
         self.account = account
         self.messages = messages
         self.bodies = bodies
         self.attachmentData = attachmentData
+        self.htmlBodies = htmlBodies
     }
 
     public func authorize() async throws {}
@@ -25,6 +28,10 @@ public struct MockMailProvider: MailProvider {
 
     public func fetchBody(for message: MailMessage) async throws -> String {
         bodies[message.providerMessageID] ?? message.snippet
+    }
+
+    public func fetchHTMLBody(for message: MailMessage) async throws -> String? {
+        htmlBodies[message.providerMessageID]
     }
 
     public func fetchAttachment(_ attachment: AttachmentInfo, in message: MailMessage) async throws -> Data {

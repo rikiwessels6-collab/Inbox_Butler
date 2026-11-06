@@ -34,7 +34,8 @@ enum MockData {
             MockMailProvider(account: gmail, messages: [
                 m(gmail, "g1", "Dr Patel's Surgery", "Appointment confirmed Thu 14:30", "Your appointment is booked for Thursday at 14:30.", hoursAgo: 0.5, importance: 0.8, attachments: [ics]),
                 m(gmail, "g2", "Mum", "Sunday lunch?", "Are you coming on Sunday? Let me know by Friday.", hoursAgo: 5, importance: 0.5, waiting: true)
-            ], bodies: gmailBodies, attachmentData: ["a2": Data(icsText.utf8)]),
+            ], bodies: gmailBodies, attachmentData: ["a2": Data(icsText.utf8)],
+                htmlBodies: ["g1": "<h2>Appointment confirmed</h2><p>Your appointment is booked. <a href=\"https://example.com\">Manage booking</a></p><p><img src=\"https://example.com/tracker.png\" width=\"1\" height=\"1\"></p>"]),
             MockMailProvider(account: work, messages: [
                 m(work, "w1", "Sam Rivera", "Contract needs signing today", "Please review and sign before 17:00.", hoursAgo: 1, importance: 0.95, waiting: true, attachments: [pdf]),
                 m(work, "w2", "Team Calendar", "Weekly sync moved to Wed", "The weekly sync is now on Wednesday at 10:00.", hoursAgo: 8, read: true)

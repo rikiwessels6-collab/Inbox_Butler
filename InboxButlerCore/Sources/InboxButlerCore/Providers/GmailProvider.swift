@@ -74,6 +74,17 @@ public struct GmailProvider: MailProvider {
         return message.snippet
     }
 
+    public func fetchHTMLBody(for message: MailMessage) async throws -> String? {
+        let (data, status) = try await get("messages/\(message.providerMessageID)", query: [
+            .init(name: "format", value: "full"),
+            .init(name: "fields", value: Self.bodyFields)
+        ])
+        guard status == 200, let raw = try? JSONDecoder().decode(RawMessage.self, from: data) else {
+            throw MailProviderError.network("Gmail returned \(status) reading the message.")
+        }
+        return Self.firstBody(in: raw.payload, mime: "text/html")
+    }
+
     public func fetchAttachment(_ attachment: AttachmentInfo, in message: MailMessage) async throws -> Data {
         let (data, status) = try await get("messages/\(message.providerMessageID)/attachments/\(attachment.id)")
         guard status == 200, let body = try? JSONDecoder().decode(AttachmentBody.self, from: data),

@@ -251,6 +251,18 @@ final class AppModel {
         return done
     }
 
+    /// Downloads an attachment from the user's mail server (for preview).
+    func attachmentData(_ attachment: AttachmentInfo, in message: MailMessage) async throws -> Data {
+        guard let provider = providerByAccount[message.accountID] else { throw MailProviderError.notAuthorized }
+        return try await provider.fetchAttachment(attachment, in: message)
+    }
+
+    /// The message's original HTML (nil if it has none), for the formatted view.
+    func htmlBody(for message: MailMessage) async throws -> String? {
+        guard let provider = providerByAccount[message.accountID] else { return nil }
+        return try await provider.fetchHTMLBody(for: message)
+    }
+
     func dismiss(_ proposal: EventProposal) {
         var dismissed = proposal
         dismissed.status = .dismissed

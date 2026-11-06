@@ -39,3 +39,34 @@ jobs:
           echo "---- errors ----"; grep -E "error:" build.log | sort -u | head -60
           echo "---- tail ----"; tail -n 15 build.log
           exit $status
+
+  ui-smoke:
+    name: Launch app in simulator and tap through
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen and generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Available simulators
+        run: xcrun simctl list devices available | grep -E "iPhone" | head -5
+      - name: UI smoke test
+        run: |
+          xcodebuild test \
+            -project InboxButler.xcodeproj \
+            -scheme InboxButler \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -only-testing:InboxButlerUITests \
+            CODE_SIGNING_ALLOWED=NO \
+            -resultBundlePath ui.xcresult > ui.log 2>&1 && status=0 || status=$?
+          echo "---- errors ----"; grep -E "error:|failed|Assertion" ui.log | sort -u | head -60
+          echo "---- tests ----"; grep -E "Test Case.*(passed|failed)" ui.log | head -20
+          echo "---- tail ----"; tail -n 15 ui.log
+          exit $status
+      - name: Keep test results if it failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-results
+          path: ui.xcresult

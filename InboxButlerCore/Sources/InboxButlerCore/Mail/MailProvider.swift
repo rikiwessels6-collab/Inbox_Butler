@@ -55,6 +55,14 @@ public protocol MailProvider: Sendable {
     /// message is opened or scanned, not during sync.
     func fetchBody(for message: MailMessage) async throws -> String
 
+    /// The original HTML of the message, if it has one (for the formatted view).
+    func fetchHTMLBody(for message: MailMessage) async throws -> String?
+
     /// Download one attachment's bytes (on demand, not during sync).
     func fetchAttachment(_ attachment: AttachmentInfo, in message: MailMessage) async throws -> Data
+}
+
+extension MailProvider {
+    /// Providers without HTML support just say there is none.
+    public func fetchHTMLBody(for message: MailMessage) async throws -> String? { nil }
 }

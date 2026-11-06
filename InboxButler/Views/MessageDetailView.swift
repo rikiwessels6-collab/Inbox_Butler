@@ -1,4 +1,5 @@
 import SwiftUI
+import QuickLook
 import InboxButlerCore
 
 /// A message with its full text, attachments, and events found in them.
@@ -10,6 +11,13 @@ struct MessageDetailView: View {
     @State private var analysis: MessageAnalysis?
     @State private var proposals: [EventProposal] = []
     @State private var isLoading = true
+    @State private var htmlItem: HTMLItem?
+    @State private var isLoadingHTML = false
+    @State private var previewURL: URL?
+    @State private var openingAttachment: String?
+    @State private var alertText: String?
+
+    private struct HTMLItem: Identifiable { let id = UUID(); let html: String }
 
     var body: some View {
         List {
@@ -40,17 +48,32 @@ struct MessageDetailView: View {
                     Text(message.snippet).foregroundStyle(.secondary)
                     if isLoading { ProgressView() }
                 }
+                Button {
+                    Task { await showFormatted() }
+                } label: {
+                    if isLoadingHTML { ProgressView() } else { Label("View formatted", systemImage: "doc.richtext") }
+                }
+                .disabled(isLoadingHTML)
             }
 
             if !message.attachments.isEmpty {
                 Section("Attachments") {
                     ForEach(message.attachments) { attachment in
-                        HStack {
-                            Label(attachment.filename, systemImage: attachment.kind.symbolName)
-                            Spacer()
-                            Text(attachment.kind == .other ? "Not scanned" : byteString(attachment.byteCount))
-                                .font(.caption).foregroundStyle(.secondary)
+                        Button {
+                            Task { await preview(attachment) }
+                        } label: {
+                            HStack {
+                                Label(attachment.filename, systemImage: attachment.kind.symbolName)
+                                Spacer()
+                                if openingAttachment == attachment.id {
+                                    ProgressView()
+                                } else {
+                                    Text(attachment.kind == .other ? "Preview only" : byteString(attachment.byteCount))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
                         }
+                        .foregroundStyle(.primary)
                     }
                 }
             }
@@ -87,11 +110,52 @@ struct MessageDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .quickLookPreview($previewURL)
+        .sheet(item: $htmlItem) { item in HTMLMessageSheet(subject: message.subject, html: item.html) }
+        .alert("Message", isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(alertText ?? "") }
+        .onChange(of: previewURL) { old, new in
+            // Remove the temporary copy of the attachment when the preview closes.
+            if new == nil, let old { try? FileManager.default.removeItem(at: old.deletingLastPathComponent()) }
+        }
         .onAppear { model.markReadLocally(message) }
         .task {
             analysis = await model.analysis(for: message)
             proposals = analysis?.proposals ?? []
             isLoading = false
+        }
+    }
+
+    private func showFormatted() async {
+        isLoadingHTML = true
+        defer { isLoadingHTML = false }
+        do {
+            if let html = try await model.htmlBody(for: message) {
+                htmlItem = HTMLItem(html: html)
+            } else {
+                alertText = "This message has no formatted version."
+            }
+        } catch {
+            alertText = error.localizedDescription
+        }
+    }
+
+    /// Downloads the attachment to a temporary file, previews it, then deletes it.
+    private func preview(_ attachment: AttachmentInfo) async {
+        openingAttachment = attachment.id
+        defer { openingAttachment = nil }
+        do {
+            let data = try await model.attachmentData(attachment, in: message)
+            guard !data.isEmpty else { alertText = "No preview is available for this file."; return }
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let name = attachment.filename.replacingOccurrences(of: "/", with: "_")
+            let url = dir.appendingPathComponent(name.isEmpty ? "attachment" : name)
+            try data.write(to: url, options: .completeFileProtection)
+            previewURL = url
+        } catch {
+            alertText = error.localizedDescription
         }
     }
 

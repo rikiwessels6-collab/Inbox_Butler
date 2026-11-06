@@ -65,6 +65,8 @@ targets:
           - fetch
         BGTaskSchedulerPermittedIdentifiers:
           - com.boundarylineapps.InboxButler.refresh
+    scheme:
+      testTargets: [InboxButlerUITests]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.boundarylineapps.InboxButler
@@ -93,3 +95,13 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.boundarylineapps.InboxButler.Widget
         TARGETED_DEVICE_FAMILY: "1,2"
         SKIP_INSTALL: YES
+  InboxButlerUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [InboxButlerUITests]
+    dependencies:
+      - target: InboxButler
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.boundarylineapps.InboxButler.UITests
+        GENERATE_INFOPLIST_FILE: YES
