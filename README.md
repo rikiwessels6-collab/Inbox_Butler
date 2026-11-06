@@ -71,6 +71,24 @@ follow **[docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)**.
 8. Privacy: `PrivacyInfo.xcprivacy` is included (no tracking, no collected data). If an
    AI proxy is added, revisit it and the App Privacy answers.
 
+## Inbox, search and reply tracking
+
+- **iPad split view** (filters, list, message) that collapses to a normal stack on iPhone.
+- Filters: **All, Priority, Needs a reply, Waiting on others, Newsletters**, plus one per account.
+  Search covers every account and works offline.
+- **Needs a reply / Waiting on others** are worked out on-device from your inbox and sent mail.
+  Limit: it only sees mail still in the Inbox, so archiving a reply in Gmail can cause a false
+  "no reply yet" reminder.
+- **Follow-up reminders** only fire for mail you sent to a *priority* contact (default on).
+- **Suggested priority senders** from your own habits (people you write to often and answer
+  quickly). Nothing is added unless you tap Add.
+- **Time Sensitive** priority notifications (can break through Focus), optional **8:00 morning
+  summary**, optional **Face ID lock**, optional **hide sender/subject on widgets**.
+- **Siri / Shortcuts:** "What's urgent in Inbox Butler?" reads the same summary as the widget.
+- **View formatted** shows the original HTML: JavaScript off, remote images/trackers blocked
+  unless you tap "Load remote images", links open in Safari. Attachments preview with Quick Look
+  (temporary copy deleted afterwards).
+
 ## Attachments and calendar events
 
 Open a message and the app reads it **on your device**:
