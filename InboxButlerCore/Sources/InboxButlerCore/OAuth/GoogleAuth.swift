@@ -164,6 +164,10 @@ public actor GoogleTokenManager {
         secrets.remove(key)
     }
 
+    /// Deletes local tokens WITHOUT revoking at Google. Use when the same Google
+    /// grant is still in use elsewhere (e.g. the user re-added an existing account).
+    public func discardLocally() { secrets.remove(key) }
+
     private func load() throws -> GoogleTokens? {
         guard let json = try secrets.get(key) else { return nil }
         return try? JSONDecoder().decode(GoogleTokens.self, from: Data(json.utf8))
