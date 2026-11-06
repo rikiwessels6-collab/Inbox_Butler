@@ -46,6 +46,9 @@ public enum DateEventExtractor {
         let startOffset = max(0, collapsed.distance(from: collapsed.startIndex, to: r.lowerBound) - 40)
         let s = collapsed.index(collapsed.startIndex, offsetBy: startOffset)
         let e = collapsed.index(s, offsetBy: min(90, collapsed.distance(from: s, to: collapsed.endIndex)))
-        return (startOffset > 0 ? "…" : "") + collapsed[s..<e] + (e < collapsed.endIndex ? "…" : "")
+        var result = String(collapsed[s..<e])
+        if startOffset > 0 { result = "…" + result }
+        if e < collapsed.endIndex { result += "…" }
+        return result
     }
 }
