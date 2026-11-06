@@ -172,8 +172,7 @@ demo video. Ask whether you want to pursue this before investing.
      implemented either; only the protocol exists.
 2. **First provider** *(decided: Gmail.)*
 3. **IMAP library** *(decided: `swift-nio-imap`.)*
-4. **Bundle id, team id and App Group id.** Placeholders (`com.example.InboxButler`,
-   `group.com.example.InboxButler`) are in `project.yml` and Core.
+4. **Bundle id and App Group id** *(decided: `com.boundarylineapps.InboxButler`, widget `.Widget`, group `group.com.boundarylineapps.InboxButler`.)* Team id still to fill in `project.yml`.
 5. **Project generation.** I used XcodeGen (`project.yml`) because I cannot author a
    reliable `.xcodeproj` from Linux. If you prefer a committed `.xcodeproj`, generate
    it once on your Mac and commit it.

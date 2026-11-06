@@ -30,13 +30,13 @@ xcodegen generate
 open InboxButler.xcodeproj
 ```
 
-Before the first build, replace the placeholders (all in `project.yml` unless noted):
+Bundle ids are set for Boundary Line Apps. Before the first build, set your team id and (if you change the ids) keep these in sync (all in `project.yml` unless noted):
 
 | Placeholder | Where |
 |---|---|
-| `DEVELOPMENT_TEAM` (your team id) | `project.yml` |
-| `com.example.InboxButler` (bundle id); widget must be `<app id>.Widget` | `project.yml` |
-| `group.com.example.InboxButler` (App Group) | `project.yml` (both targets) **and** `WidgetSnapshotStore.appGroupID` in Core |
+| `DEVELOPMENT_TEAM` (your team id, **still to fill in**) | `project.yml` |
+| `com.boundarylineapps.InboxButler` (bundle id); widget must be `<app id>.Widget` | `project.yml` |
+| `group.com.boundarylineapps.InboxButler` (App Group) | `project.yml` (both targets) **and** `WidgetSnapshotStore.appGroupID` in Core |
 
 Then in the Apple Developer portal register the App Group and both bundle ids
 (Xcode's automatic signing does this for you once the team is set). Run on a

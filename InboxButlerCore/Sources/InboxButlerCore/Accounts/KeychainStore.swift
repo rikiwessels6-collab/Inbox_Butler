@@ -11,7 +11,7 @@ public struct KeychainStore: Sendable {
 
     private let service: String
 
-    public init(service: String = "com.example.InboxButler") {
+    public init(service: String = "com.boundarylineapps.InboxButler") {
         self.service = service
     }
 

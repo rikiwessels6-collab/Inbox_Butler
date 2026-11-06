@@ -87,7 +87,7 @@ extension WidgetSnapshot {
 public struct WidgetSnapshotStore: Sendable {
     /// PLACEHOLDER: replace with your App Group id (must match project.yml
     /// entitlements for both the app and the widget target).
-    public static let appGroupID = "group.com.example.InboxButler"
+    public static let appGroupID = "group.com.boundarylineapps.InboxButler"
 
     private let fileURL: URL?
 

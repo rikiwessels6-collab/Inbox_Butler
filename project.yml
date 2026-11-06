@@ -4,8 +4,8 @@
 #
 # BEFORE FIRST BUILD, replace the placeholders:
 #   DEVELOPMENT_TEAM          your 10-character Apple team id
-#   com.example.InboxButler   your bundle id (widget id must be "<app id>.Widget")
-#   group.com.example.InboxButler  your App Group id. Must ALSO match
+#   com.boundarylineapps.InboxButler   your bundle id (widget id must be "<app id>.Widget")
+#   group.com.boundarylineapps.InboxButler  your App Group id. Must ALSO match
 #       WidgetSnapshotStore.appGroupID in InboxButlerCore/.../Widget/WidgetSnapshot.swift
 name: InboxButler
 options:
@@ -33,7 +33,7 @@ targets:
       path: InboxButler/InboxButler.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.example.InboxButler
+          - group.com.boundarylineapps.InboxButler
     info:
       path: InboxButler/Info.plist
       properties:
@@ -54,10 +54,10 @@ targets:
         UIBackgroundModes:
           - fetch
         BGTaskSchedulerPermittedIdentifiers:
-          - com.example.InboxButler.refresh
+          - com.boundarylineapps.InboxButler.refresh
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.InboxButler
+        PRODUCT_BUNDLE_IDENTIFIER: com.boundarylineapps.InboxButler
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: NO
@@ -71,7 +71,7 @@ targets:
       path: InboxButlerWidget/InboxButlerWidget.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.example.InboxButler
+          - group.com.boundarylineapps.InboxButler
     info:
       path: InboxButlerWidget/Info.plist
       properties:
@@ -80,6 +80,6 @@ targets:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.InboxButler.Widget
+        PRODUCT_BUNDLE_IDENTIFIER: com.boundarylineapps.InboxButler.Widget
         TARGETED_DEVICE_FAMILY: "1,2"
         SKIP_INSTALL: YES

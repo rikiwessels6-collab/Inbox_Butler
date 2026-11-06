@@ -6,7 +6,7 @@ import BackgroundTasks
 /// push server; see ARCHITECTURE.md.
 enum BackgroundRefresh {
     /// Must match BGTaskSchedulerPermittedIdentifiers in project.yml.
-    static let identifier = "com.example.InboxButler.refresh"
+    static let identifier = "com.boundarylineapps.InboxButler.refresh"
 
     static func schedule() {
         let request = BGAppRefreshTaskRequest(identifier: identifier)
