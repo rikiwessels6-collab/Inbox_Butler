@@ -1,10 +1,13 @@
 import SwiftUI
 import InboxButlerCore
 
-/// Lists connected accounts. "Add account" is a placeholder until providers are wired.
+/// Connected accounts, plus "Add an account". Gmail is wired up; the others
+/// arrive in later steps.
 struct AccountListView: View {
     @Environment(AppModel.self) private var model
-    @State private var showingAddInfo = false
+    @State private var isSigningIn = false
+    @State private var message: String?
+    @State private var pendingRemoval: MailAccount?
 
     var body: some View {
         NavigationStack {
@@ -27,15 +30,34 @@ struct AccountListView: View {
                                     .accessibilityLabel("Sync problem: \(error)")
                             }
                         }
+                        .swipeActions {
+                            if !model.usingDemoData {
+                                Button("Remove", role: .destructive) { pendingRemoval = account }
+                            }
+                        }
                     }
+                } header: {
+                    if model.usingDemoData { Text("Demo accounts (not real)") }
                 } footer: {
-                    Text("Demo data. Accounts are read-only: Inbox Butler never sends, deletes or archives mail on its own.")
+                    Text(model.usingDemoData
+                         ? "Showing fake demo mail until you connect a real account."
+                         : "Read-only: Inbox Butler never sends, deletes or archives mail on its own. Swipe an account to remove it.")
                 }
 
                 Section("Add an account") {
-                    ForEach(AccountKind.allCases, id: \.self) { kind in
+                    Button {
+                        Task { await addGmail() }
+                    } label: {
+                        HStack {
+                            Label("Gmail", systemImage: AccountKind.gmail.symbolName)
+                            if isSigningIn { Spacer(); ProgressView() }
+                        }
+                    }
+                    .disabled(isSigningIn)
+
+                    ForEach([AccountKind.microsoft, .icloud, .imap], id: \.self) { kind in
                         Button {
-                            showingAddInfo = true
+                            message = "\(kind.displayName) isn't available yet. Gmail comes first."
                         } label: {
                             Label(kind.displayName, systemImage: kind.symbolName)
                         }
@@ -43,11 +65,32 @@ struct AccountListView: View {
                 }
             }
             .navigationTitle("Accounts")
-            .alert("Not wired up yet", isPresented: $showingAddInfo) {
+            .alert("Accounts", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("Sign-in for this provider hasn't been implemented. Everything shown is demo data.")
+                Text(message ?? "")
             }
+            .confirmationDialog("Remove \(pendingRemoval?.emailAddress ?? "account")?",
+                                isPresented: Binding(get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } }),
+                                titleVisibility: .visible) {
+                Button("Remove and revoke access", role: .destructive) {
+                    if let account = pendingRemoval { Task { await model.removeAccount(account) } }
+                }
+            } message: {
+                Text("Deletes the saved sign-in and the cached mail on this device, and tells Google to revoke access. Your mailbox itself is not touched.")
+            }
+        }
+    }
+
+    private func addGmail() async {
+        isSigningIn = true
+        defer { isSigningIn = false }
+        do {
+            try await model.addGmailAccount()
+        } catch let error as SignInError {
+            if case .failed(let text) = error { message = text }   // cancelled = silent
+        } catch {
+            message = error.localizedDescription
         }
     }
 }

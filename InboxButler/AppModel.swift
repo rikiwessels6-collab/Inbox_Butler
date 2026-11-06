@@ -3,8 +3,23 @@ import InboxButlerCore
 import WidgetKit
 import UserNotifications
 
+enum AddAccountError: LocalizedError {
+    case googleNotConfigured
+    case duplicate(String)
+    var errorDescription: String? {
+        switch self {
+        case .googleNotConfigured:
+            return "Google sign-in isn't set up yet. Add your client ID in AppConfig.swift (see docs/SETUP_GOOGLE.md)."
+        case .duplicate(let email):
+            return "\(email) is already connected."
+        }
+    }
+}
+
 /// Holds app-wide state for the UI: accounts, the merged inbox, sync errors.
-/// Uses mock providers for now; real providers replace them one at a time.
+/// With no accounts connected it shows demo data; once you connect one, only
+/// your real mail is shown. Real mail is cached locally (SwiftData) so the
+/// inbox appears instantly and works offline.
 @Observable
 @MainActor
 final class AppModel {
@@ -16,35 +31,148 @@ final class AppModel {
     private(set) var messages: [MailMessage] = []
     private(set) var errors: [UUID: String] = [:]
     private(set) var isRefreshing = false
+    /// True while showing fake demo mail (no real account connected).
+    private(set) var usingDemoData = false
 
-    private var providers: [any MailProvider] = []
     private var engine = SyncEngine(providers: [])
 
+    private let accountStore = AccountStore()
     private let senderStore = PrioritySenderStore()
     private let notifiedStore = NotifiedStore()
     private let notifier = NotificationService()
+    private let secrets = KeychainStore()
+    private let cache: MessageCache?
 
     private init() {
         prioritySenders = senderStore.load()
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
-        let mock = MockData.make()
-        accounts = mock.accounts
-        providers = mock.providers
-        engine = SyncEngine(providers: providers)
+        cache = try? MessageCache()
+        accounts = accountStore.load()
+        configureProviders()
+        // Offline-first: show what we already have before the network answers.
+        if !usingDemoData, let cache { messages = cache.load() }
     }
 
     func account(for id: UUID) -> MailAccount? {
         accounts.first { $0.id == id }
     }
 
+    // MARK: Providers
+
+    private func configureProviders() {
+        if accounts.isEmpty {
+            let mock = MockData.make()
+            usingDemoData = true
+            accounts = mock.accounts
+            engine = SyncEngine(providers: mock.providers)
+        } else {
+            usingDemoData = false
+            engine = SyncEngine(providers: accounts.map(makeProvider))
+        }
+    }
+
+    private func tokenManager(for accountID: UUID) -> GoogleTokenManager {
+        GoogleTokenManager(accountID: accountID, auth: GoogleAuth(config: AppConfig.googleOAuth), secrets: secrets)
+    }
+
+    private func makeProvider(_ account: MailAccount) -> any MailProvider {
+        switch account.kind {
+        case .gmail: return GmailProvider(account: account, tokens: tokenManager(for: account.id))
+        case .microsoft: return MicrosoftProvider(account: account)
+        case .icloud, .imap: return IMAPProvider(account: account)
+        }
+    }
+
+    // MARK: Adding and removing accounts
+
+    /// Google sign-in (read-only scope), then stores tokens in the Keychain.
+    func addGmailAccount() async throws {
+        let config = AppConfig.googleOAuth
+        guard config.isConfigured else { throw AddAccountError.googleNotConfigured }
+
+        let tokens = try await GoogleSignInFlow().signIn(config: config)
+        let id = UUID()
+        let manager = tokenManager(for: id)
+        try await manager.save(tokens)
+
+        let email: String
+        do {
+            let probe = MailAccount(id: id, kind: .gmail, emailAddress: "", label: "Gmail", colorIndex: 0)
+            email = try await GmailProvider(account: probe, tokens: manager).fetchEmailAddress()
+        } catch {
+            await manager.signOut()
+            throw error
+        }
+
+        let existing = usingDemoData ? [] : accounts
+        if existing.contains(where: { $0.emailAddress.caseInsensitiveCompare(email) == .orderedSame }) {
+            // Same Google grant as the existing account: don't revoke, just drop the duplicate copy.
+            await manager.discardLocally()
+            throw AddAccountError.duplicate(email)
+        }
+
+        if usingDemoData { accounts = []; messages = [] }
+        let gmailCount = existing.filter { $0.kind == .gmail }.count
+        accounts.append(MailAccount(id: id, kind: .gmail, emailAddress: email,
+                                    label: gmailCount == 0 ? "Gmail" : "Gmail \(gmailCount + 1)",
+                                    colorIndex: existing.count))
+        try? accountStore.save(accounts)
+        configureProviders()
+        await refresh()
+    }
+
+    /// Signs out (revokes Google access), deletes local tokens and cached mail.
+    func removeAccount(_ account: MailAccount) async {
+        guard !usingDemoData else { return }
+        if account.kind == .gmail { await tokenManager(for: account.id).signOut() }
+        cache?.remove(accountID: account.id)
+        accounts.removeAll { $0.id == account.id }
+        errors[account.id] = nil
+        try? accountStore.save(accounts)
+        configureProviders()
+        messages = usingDemoData ? [] : (cache?.load() ?? [])
+        if usingDemoData { await refresh() }
+        publishWidgetSnapshot()
+    }
+
+    // MARK: Sync
+
     func refresh() async {
         isRefreshing = true
         defer { isRefreshing = false }
         let result = await engine.refresh()
-        messages = result.messages
         errors = result.errors
+        if usingDemoData {
+            messages = result.messages
+        } else if let cache {
+            // Only accounts that synced successfully update the cache; accounts
+            // that failed (e.g. offline) keep showing their cached mail.
+            for account in accounts where result.errors[account.id] == nil {
+                cache.sync(accountID: account.id, fetched: result.messages.filter { $0.accountID == account.id })
+            }
+            cache.prune()
+            messages = cache.load()
+        } else {
+            messages = result.messages
+        }
         publishWidgetSnapshot()
         await notifyForNewMail()
+    }
+
+    /// Local-only: marks read in the app. Never changes the real mailbox.
+    func markReadLocally(_ message: MailMessage) {
+        guard let i = messages.firstIndex(where: { $0.id == message.id }) else { return }
+        messages[i].isRead = true
+        cache?.markReadLocally(message.id)
+    }
+
+    /// Writes the small summary the widget reads (App Group file) and asks
+    /// WidgetKit to refresh. Contains sender/subject text; see README privacy notes.
+    private func publishWidgetSnapshot() {
+        let snapshot = WidgetSnapshot.make(messages: messages, accounts: accounts, priority: prioritySenders)
+        if WidgetSnapshotStore().save(snapshot) {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     // MARK: Priority senders
@@ -79,6 +207,9 @@ final class AppModel {
     /// notified about yet. The very first run just records existing mail so
     /// installing the app doesn't buzz for old messages.
     private func notifyForNewMail() async {
+        // Demo mail must never mark "seen" state, or the first real sync would
+        // be treated as a later run and notify for the whole inbox.
+        guard !usingDemoData else { return }
         guard let notified = notifiedStore.load() else {
             notifiedStore.add(messages.map(\.id))
             return
@@ -107,20 +238,5 @@ final class AppModel {
     func sendTestNotification() async {
         await notifier.post(PlannedNotification(id: "test-\(UUID().uuidString)", title: "Sam Rivera",
                                                 subtitle: "Work", body: "Contract needs signing today"))
-    }
-
-    /// Writes the small summary the widget reads (App Group file) and asks
-    /// WidgetKit to refresh. Contains sender/subject text; see README privacy notes.
-    private func publishWidgetSnapshot() {
-        let snapshot = WidgetSnapshot.make(messages: messages, accounts: accounts, priority: prioritySenders)
-        if WidgetSnapshotStore().save(snapshot) {
-            WidgetCenter.shared.reloadAllTimelines()
-        }
-    }
-
-    /// Local-only: marks read in the app. Never changes the real mailbox.
-    func markReadLocally(_ message: MailMessage) {
-        guard let i = messages.firstIndex(where: { $0.id == message.id }) else { return }
-        messages[i].isRead = true
     }
 }

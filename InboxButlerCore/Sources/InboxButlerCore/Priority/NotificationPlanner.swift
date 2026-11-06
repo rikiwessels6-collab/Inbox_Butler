@@ -6,6 +6,10 @@ public struct PlannedNotification: Identifiable, Equatable, Sendable {
     public let title: String       // sender
     public let subtitle: String    // account label
     public let body: String        // subject
+
+    public init(id: String, title: String, subtitle: String, body: String) {
+        self.id = id; self.title = title; self.subtitle = subtitle; self.body = body
+    }
 }
 
 /// Decides which new messages deserve a notification. Pure logic, no UI.
