@@ -42,9 +42,11 @@ public struct EventProposalStore: Sendable {
         return result
     }
 
-    public func update(_ proposal: EventProposal) {
+    /// Saves a changed proposal. Pass `replacing:` (the ORIGINAL fingerprint) when the
+    /// user edited the start time, since the fingerprint is derived from it.
+    public func update(_ proposal: EventProposal, replacing originalFingerprint: String? = nil) {
         var file = read()
-        if let i = file.proposals.firstIndex(where: { $0.fingerprint == proposal.fingerprint }) {
+        if let i = file.proposals.firstIndex(where: { $0.fingerprint == (originalFingerprint ?? proposal.fingerprint) }) {
             file.proposals[i] = proposal
         } else {
             file.proposals.append(proposal)

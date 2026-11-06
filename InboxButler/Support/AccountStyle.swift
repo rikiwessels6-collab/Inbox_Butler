@@ -20,3 +20,15 @@ extension AccountKind {
         }
     }
 }
+
+extension AttachmentInfo.Kind {
+    var symbolName: String {
+        switch self {
+        case .pdf: return "doc.richtext"
+        case .image: return "photo"
+        case .calendar: return "calendar"
+        case .wordDocument: return "doc.text"
+        case .other: return "doc"
+        }
+    }
+}

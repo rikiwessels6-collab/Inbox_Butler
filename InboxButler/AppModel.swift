@@ -42,6 +42,10 @@ final class AppModel {
     private let notifier = NotificationService()
     private let secrets = KeychainStore()
     private let cache: MessageCache?
+    private let proposalStore = EventProposalStore()
+    private let calendarWriter = EventKitCalendarWriter()
+    private let analyzer = MessageAnalyzer()
+    private var providerByAccount: [UUID: any MailProvider] = [:]
 
     private init() {
         prioritySenders = senderStore.load()
@@ -65,9 +69,12 @@ final class AppModel {
             usingDemoData = true
             accounts = mock.accounts
             engine = SyncEngine(providers: mock.providers)
+            providerByAccount = Dictionary(uniqueKeysWithValues: mock.providers.map { ($0.account.id, $0) })
         } else {
             usingDemoData = false
-            engine = SyncEngine(providers: accounts.map(makeProvider))
+            let providers = accounts.map(makeProvider)
+            engine = SyncEngine(providers: providers)
+            providerByAccount = Dictionary(uniqueKeysWithValues: providers.map { ($0.account.id, $0) })
         }
     }
 
@@ -126,6 +133,7 @@ final class AppModel {
         guard !usingDemoData else { return }
         if account.kind == .gmail { await tokenManager(for: account.id).signOut() }
         cache?.remove(accountID: account.id)
+        proposalStore.removeMessages(withPrefix: account.id.uuidString + "/")
         accounts.removeAll { $0.id == account.id }
         errors[account.id] = nil
         try? accountStore.save(accounts)
@@ -157,6 +165,7 @@ final class AppModel {
         }
         publishWidgetSnapshot()
         await notifyForNewMail()
+        await scanPriorityMailForEvents()
     }
 
     /// Local-only: marks read in the app. Never changes the real mailbox.
@@ -169,10 +178,58 @@ final class AppModel {
     /// Writes the small summary the widget reads (App Group file) and asks
     /// WidgetKit to refresh. Contains sender/subject text; see README privacy notes.
     private func publishWidgetSnapshot() {
-        let snapshot = WidgetSnapshot.make(messages: messages, accounts: accounts, priority: prioritySenders)
+        let snapshot = WidgetSnapshot.make(messages: messages, accounts: accounts,
+                                           events: usingDemoData ? [] : proposalStore.all(),
+                                           priority: prioritySenders)
         if WidgetSnapshotStore().save(snapshot) {
             WidgetCenter.shared.reloadAllTimelines()
         }
+    }
+
+    // MARK: Attachments and calendar events
+
+    /// Reads the full message and its attachments ON THIS DEVICE and proposes events.
+    /// Remembers dismissed/added events so they don't come back.
+    func analysis(for message: MailMessage) async -> MessageAnalysis? {
+        guard let provider = providerByAccount[message.accountID] else { return nil }
+        var result = await analyzer.analyze(message, provider: provider)
+        if !usingDemoData {
+            result.proposals = proposalStore.merge(result.proposals, forMessage: message.id)
+            publishWidgetSnapshot()
+        }
+        return result
+    }
+
+    /// Adds the (possibly edited) event to the calendar. Only ever called from the
+    /// user tapping "Add" on that event. `original` identifies the stored proposal.
+    func addToCalendar(_ edited: EventProposal, original: EventProposal) async throws -> EventProposal {
+        try await calendarWriter.add(edited)
+        var done = edited
+        done.status = .confirmed
+        if !usingDemoData {
+            proposalStore.update(done, replacing: original.fingerprint)
+            publishWidgetSnapshot()
+        }
+        return done
+    }
+
+    func dismiss(_ proposal: EventProposal) {
+        var dismissed = proposal
+        dismissed.status = .dismissed
+        if !usingDemoData {
+            proposalStore.update(dismissed)
+            publishWidgetSnapshot()
+        }
+    }
+
+    /// Scans new mail from priority senders (max 5 per refresh) so today's events
+    /// reach the widget without opening each message. Everything stays on-device.
+    private func scanPriorityMailForEvents() async {
+        guard !usingDemoData else { return }
+        let candidates = messages
+            .filter { !$0.isRead && isPriority($0) && !proposalStore.hasScanned($0.id) }
+            .prefix(5)
+        for message in candidates { _ = await analysis(for: message) }
     }
 
     // MARK: Priority senders

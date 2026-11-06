@@ -43,9 +43,10 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        NSCalendarsFullAccessUsageDescription: >-
-          Inbox Butler proposes calendar events found in your email. Nothing is
-          added until you confirm each one.
+        # Write-only: the app can add events you confirm but cannot read your calendar.
+        NSCalendarsWriteOnlyAccessUsageDescription: >-
+          Inbox Butler adds events found in your email to your calendar, only
+          after you tap Add on each one. It cannot read your existing events.
         # App only uses OS-provided HTTPS/TLS, which is exempt. Confirm before
         # submitting to App Store Connect.
         ITSAppUsesNonExemptEncryption: false
