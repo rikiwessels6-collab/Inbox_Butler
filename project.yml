@@ -49,6 +49,12 @@ targets:
         # App only uses OS-provided HTTPS/TLS, which is exempt. Confirm before
         # submitting to App Store Connect.
         ITSAppUsesNonExemptEncryption: false
+        # Periodic new-mail check (iOS decides timing, ~15+ min). Identifier must
+        # match BackgroundRefresh.identifier and use your bundle id.
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.example.InboxButler.refresh
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.InboxButler

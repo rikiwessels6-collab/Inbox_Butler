@@ -18,6 +18,15 @@ struct MessageDetailView: View {
                     }
                 }
                 Text(message.snippet)
+                if model.isPriority(message) {
+                    Label("Priority sender", systemImage: "star.fill").foregroundStyle(.yellow)
+                } else {
+                    Button {
+                        model.addPrioritySender(message.from.address)
+                    } label: {
+                        Label("Notify me about \(message.from.display)", systemImage: "star")
+                    }
+                }
             }
 
             if !message.attachments.isEmpty {

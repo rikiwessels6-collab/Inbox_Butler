@@ -1,16 +1,23 @@
 import SwiftUI
 
-/// App entry point. A single `AppModel` is created once and shared via the
-/// environment.
+/// App entry point. One shared `AppModel` is injected into the environment.
 @main
 struct InboxButlerApp: App {
-    @State private var model = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             RootView()
-                .environment(model)
-                .task { await model.refresh() }
+                .environment(AppModel.shared)
+                .task { await AppModel.shared.refresh() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { BackgroundRefresh.schedule() }
+        }
+        // iOS wakes the app here (at its discretion) to check for new mail.
+        .backgroundTask(.appRefresh(BackgroundRefresh.identifier)) {
+            BackgroundRefresh.schedule()   // chain the next wake-up
+            await AppModel.shared.refresh()
         }
     }
 }

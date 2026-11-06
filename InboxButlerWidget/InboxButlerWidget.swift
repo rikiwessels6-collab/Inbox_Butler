@@ -28,9 +28,12 @@ struct SnapshotProvider: TimelineProvider {
     }
 }
 
+/// Priority senders and urgent mail come first, then today's events, then replies waiting.
 struct InboxButlerWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: SnapshotEntry
+
+    private var snap: WidgetSnapshot { entry.snapshot }
 
     var body: some View {
         switch family {
@@ -40,50 +43,68 @@ struct InboxButlerWidgetView: View {
         }
     }
 
+    /// One mail line: star for priority senders, sender in bold, then subject.
+    private func row(_ item: WidgetSnapshot.EmailItem, lines: Int = 1) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 3) {
+                if item.isPriority { Image(systemName: "star.fill").foregroundStyle(.yellow).font(.caption2) }
+                Text(item.sender).font(.caption.weight(.semibold)).lineLimit(1)
+            }
+            Text(item.subject).font(.caption).lineLimit(lines).foregroundStyle(.secondary)
+        }
+    }
+
     private var small: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("\(entry.snapshot.urgentEmails.count) urgent", systemImage: "exclamationmark.envelope")
+            Label("\(snap.priorityUnreadCount) priority", systemImage: "star.fill")
                 .font(.headline)
-            if let first = entry.snapshot.urgentEmails.first {
-                Text(first.subject).font(.caption).lineLimit(2)
+            if let first = snap.urgentEmails.first {
+                row(first, lines: 2)
+            } else {
+                Text("Nothing urgent").font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            Label("\(entry.snapshot.repliesWaiting) replies waiting", systemImage: "arrowshape.turn.up.left")
-                .font(.caption2).foregroundStyle(.secondary)
+            Text(footer).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         }
     }
 
     private var medium: some View {
         HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Urgent").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                ForEach(entry.snapshot.urgentEmails.prefix(3)) { item in
-                    Text("\(item.sender): \(item.subject)").font(.caption).lineLimit(1)
-                }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Important").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                ForEach(snap.urgentEmails.prefix(3)) { row($0) }
+                if snap.urgentEmails.isEmpty { Text("Nothing urgent").font(.caption).foregroundStyle(.secondary) }
                 Spacer(minLength: 0)
-                Label("\(entry.snapshot.repliesWaiting) waiting", systemImage: "arrowshape.turn.up.left")
-                    .font(.caption2).foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Today").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                ForEach(entry.snapshot.todaysEvents.prefix(3)) { event in
+                ForEach(snap.todaysEvents.prefix(3)) { event in
                     Text("\(event.start, style: .time) \(event.title)").font(.caption).lineLimit(1)
                 }
-                if entry.snapshot.todaysEvents.isEmpty {
-                    Text("No events").font(.caption).foregroundStyle(.secondary)
-                }
+                if snap.todaysEvents.isEmpty { Text("No events").font(.caption).foregroundStyle(.secondary) }
+                Spacer(minLength: 0)
+                Label("\(snap.repliesWaiting) replies waiting", systemImage: "arrowshape.turn.up.left")
+                    .font(.caption2).foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     private var lockScreen: some View {
         VStack(alignment: .leading) {
-            Text("\(entry.snapshot.urgentEmails.count) urgent · \(entry.snapshot.repliesWaiting) waiting")
-                .font(.headline)
-            if let event = entry.snapshot.todaysEvents.first {
+            Text("\(snap.priorityUnreadCount) priority · \(snap.repliesWaiting) waiting").font(.headline)
+            if let first = snap.urgentEmails.first {
+                Text("\(first.sender): \(first.subject)").font(.caption).lineLimit(1)
+            } else if let event = snap.todaysEvents.first {
                 Text("\(event.start, style: .time) \(event.title)").font(.caption)
             }
         }
+    }
+
+    private var footer: String {
+        if let event = snap.todaysEvents.first { return "\(event.title)" }
+        return "\(snap.repliesWaiting) replies waiting"
     }
 }
 

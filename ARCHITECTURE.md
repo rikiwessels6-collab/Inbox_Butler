@@ -77,6 +77,31 @@ The widget extension only reads. Snapshots hold subjects and sender names; if yo
 would rather keep even those off the Lock Screen, the widget can show counts only
 (open question 7).
 
+## Priority senders, notifications and widget
+
+- `PrioritySender` rules (address or `@domain`), stored locally as JSON.
+- `NotificationPlanner` (pure, tested): unread + priority sender + not already
+  notified, max 5 per run. `NotifiedStore` prevents duplicates; the first run seeds
+  silently.
+- `NotificationService` posts local notifications (title = sender, subtitle =
+  account, body = subject).
+- `BackgroundRefresh` schedules `BGAppRefreshTask`. iOS controls timing.
+- `WidgetSnapshot.make` ranks priority-sender mail first, then importance.
+
+### Real-time notifications (decision needed later)
+Local notifications cannot fire the moment mail arrives, because iOS only wakes the
+app occasionally. Real-time needs a server that is told about new mail and sends an
+APNs push:
+- Gmail: `users.watch` -> Cloud Pub/Sub -> your server -> APNs.
+- Microsoft: Graph change-notification subscriptions -> your server -> APNs.
+- IMAP/iCloud: server holds IMAP IDLE connections (needs stored credentials server-side).
+The server must see mail metadata (and hold tokens) for this, which conflicts with
+"nothing leaves the device". A privacy-preserving variant: the server stores only
+refresh tokens and the priority list, and pushes a silent "check now" wake-up, with
+the app fetching and writing the notification text locally (Notification Service
+Extension). The same server could host the AI proxy. Not built; decide when
+reliability of alerts matters more than the extra infrastructure.
+
 ## Provider notes
 
 ### Gmail
@@ -136,7 +161,7 @@ demo video. Ask whether you want to pursue this before investing.
 
 ## Open questions (need your decision)
 
-1. **AI layer: on-device Apple Foundation Models, or a small backend proxy?**
+1. **AI layer** *(decided: hybrid, on-device first; proxy optional later. Not yet implemented.)*
    - *Foundation Models:* nothing leaves the device, no server to run, no key.
      Needs an Apple-Intelligence-capable iPad/iPhone on a recent OS, and a smaller
      context window than cloud models (long PDFs need chunking). Quality for
@@ -145,10 +170,8 @@ demo video. Ask whether you want to pursue this before investing.
      device, and you must host/secure a server (auth, rate limits, no logging).
    - Hybrid is possible (on-device first, proxy opt-in per account). I have **not**
      implemented either; only the protocol exists.
-2. **First provider to wire up.** Suggested: Gmail (REST API, simple JSON, easiest).
-3. **IMAP library.** Now that third-party packages are fine: use `swift-nio-imap`
-   (parser/codec only, you still write the connection and session logic) or write a
-   minimal client on `Network.framework`? I lean towards `swift-nio-imap`.
+2. **First provider** *(decided: Gmail.)*
+3. **IMAP library** *(decided: `swift-nio-imap`.)*
 4. **Bundle id, team id and App Group id.** Placeholders (`com.example.InboxButler`,
    `group.com.example.InboxButler`) are in `project.yml` and Core.
 5. **Project generation.** I used XcodeGen (`project.yml`) because I cannot author a
@@ -157,7 +180,7 @@ demo video. Ask whether you want to pursue this before investing.
 6. **OAuth sign-in.** Google and Microsoft will use `ASWebAuthenticationSession` with
    PKCE and a custom URL scheme per provider (added to the app's Info.plist when that
    provider is wired up).
-7. **Widget privacy.** Show sender/subject on the Lock Screen, or counts only?
+7. **Widget privacy** *(decided: show sender and subject.)* Note Lock Screen widgets are visible on a locked device; iOS can redact them under Settings > Face ID & Passcode.
 8. **Minimum OS.** Currently iOS 17 (SwiftData, Observation, interactive widgets).
    Foundation Models would need iOS 26 for that code path (guarded with `#available`).
 9. **Mail you reply to.** Drafts stay in-app. Later: save as a provider draft

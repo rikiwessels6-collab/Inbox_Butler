@@ -8,6 +8,8 @@ struct RootView: View {
                 .tabItem { Label("Inbox", systemImage: "tray.full") }
             AccountListView()
                 .tabItem { Label("Accounts", systemImage: "person.crop.circle") }
+            SettingsView()
+                .tabItem { Label("Priority", systemImage: "star.circle") }
         }
     }
 }

@@ -15,7 +15,8 @@ struct UnifiedInboxView: View {
         NavigationStack {
             List(visible) { message in
                 NavigationLink(value: message) {
-                    MessageRow(message: message, account: model.account(for: message.accountID))
+                    MessageRow(message: message, account: model.account(for: message.accountID),
+                               isPriority: model.isPriority(message))
                 }
             }
             .listStyle(.plain)
@@ -46,6 +47,7 @@ struct UnifiedInboxView: View {
 private struct MessageRow: View {
     let message: MailMessage
     let account: MailAccount?
+    let isPriority: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -55,6 +57,10 @@ private struct MessageRow: View {
                 .padding(.top, 7)
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
+                    if isPriority {
+                        Image(systemName: "star.fill").foregroundStyle(.yellow)
+                            .accessibilityLabel("Priority sender")
+                    }
                     Text(message.from.display)
                         .font(.headline.weight(message.isRead ? .regular : .semibold))
                     Spacer()

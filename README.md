@@ -63,6 +63,23 @@ source folders. `project.yml` documents the exact settings and entitlements.
 8. Privacy: `PrivacyInfo.xcprivacy` is included (no tracking, no collected data). If an
    AI proxy is added, revisit it and the App Privacy answers.
 
+## Priority senders and notifications
+
+- You choose the senders (a full address, or `@company.com` for everyone at a
+  company) in the **Priority** tab, or from any message ("Notify me about ...").
+- **Only** mail from those senders sends a notification. It shows the sender,
+  account and subject. Everything else stays silent.
+- The widget pins priority mail first (starred), then other urgent mail, today's
+  events and replies waiting. Lock Screen widget included.
+- Notifications are **local**: generated on the device from mail it already
+  downloaded. No push server and no data leaves the device for them.
+- **Limit:** without a server, iOS only wakes the app to check mail occasionally
+  (Background App Refresh, usually 15+ minutes, less if you rarely open the app or
+  Low Power Mode is on). Alerts are therefore not instant. Truly real-time alerts
+  need a small push backend (see ARCHITECTURE.md, "Real-time notifications").
+- Installing the app (or turning notifications on) never floods you with old mail:
+  existing mail is recorded silently first.
+
 ## What leaves the device
 
 | Data | Leaves the device? | Where / why |
@@ -72,6 +89,7 @@ source folders. `project.yml` documents the exact settings and entitlements.
 | Local mail cache, style profile, widget snapshot | **No** | App sandbox / App Group container on the device. |
 | Style profile (learned from sent mail) | **No** | Computed on-device and stored locally. |
 | Summaries, importance, date extraction, drafting | **Depends on the AI choice (undecided)** | Option A, Apple Foundation Models: nothing leaves the device. Option B, backend proxy: the text sent for each request leaves the device and goes to your proxy and then the model provider. Not implemented until you choose. |
+| Notification text (sender, subject) | **No** | Local notifications built on the device. On a locked device iOS may show or hide previews per your Notification settings. |
 | Analytics / telemetry | **None** | There is none. |
 
 No API key is ever embedded in the app.
