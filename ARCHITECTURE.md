@@ -82,9 +82,13 @@ would rather keep even those off the Lock Screen, the widget can show counts onl
 ### Gmail
 - Scope: `https://www.googleapis.com/auth/gmail.readonly` (restricted scope).
 - OAuth with PKCE via `ASWebAuthenticationSession`. iOS OAuth client type, no client secret.
-- **Testing-mode caveat:** while the Google Cloud consent screen is in "Testing",
-  refresh tokens expire after **7 days**, so you will need to re-sign-in weekly.
-  Max 100 test users.
+- **Avoiding weekly re-sign-in:** refresh tokens expire after **7 days** only while the
+  consent screen is in "Testing". Publish it to **"In production"** (External) *without*
+  submitting for verification: tokens then persist. You get a one-time "unverified app"
+  warning and a 100-user cap, fine for private use. Tokens can still be revoked (password
+  change, manual revoke, ~6 months unused). Confirm current Google rules in the console.
+- **Fallback:** Gmail over IMAP with an app password (needs 2-step verification, no OAuth,
+  no expiry; loses labels/threads).
 
 ### Microsoft (Outlook / Hotmail)
 - Microsoft identity platform v2 + Microsoft Graph. Scopes: `Mail.Read`,
@@ -115,13 +119,13 @@ choose the proxy option, AI requests. See the table in README.md. Rules:
 ## Gmail: steps for private TestFlight use
 
 1. Create a Google Cloud project; enable the Gmail API.
-2. Configure the OAuth consent screen: External, status **Testing**; add your own
-   Google addresses as test users.
+2. Configure the OAuth consent screen: External. Start in Testing with your own address
+   as a test user, then **Publish app** (In production, unverified) to stop the 7-day expiry.
 3. Add the `gmail.readonly` scope.
 4. Create an OAuth client of type **iOS** with your bundle id; note the client id and
    reversed-client-id URL scheme.
 5. Sign in from the app; accept the "unverified app" warning.
-6. Expect weekly re-auth while in Testing mode.
+6. If you stay in Testing mode, expect weekly re-auth.
 7. TestFlight: see the checklist in README.md. Internal testing needs no Beta App
    Review, which suits private use.
 
