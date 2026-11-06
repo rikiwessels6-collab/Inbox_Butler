@@ -20,6 +20,7 @@ public actor SyncEngine {
         let startCursors = cursors
         var all: [MailMessage] = []
         var errors: [UUID: String] = [:]
+        var newCursors: [UUID: SyncCursor] = [:]
 
         await withTaskGroup(of: (UUID, Result<MailPage, Error>).self) { group in
             for provider in providers {
@@ -38,12 +39,14 @@ public actor SyncEngine {
                 switch result {
                 case .success(let page):
                     all.append(contentsOf: page.messages)
-                    if let next = page.nextCursor { cursors[id] = next }
+                    if let next = page.nextCursor { newCursors[id] = next }
                 case .failure(let error):
                     errors[id] = error.localizedDescription
                 }
             }
         }
+
+        cursors.merge(newCursors) { _, new in new }
 
         // De-duplicate by unified id, newest first.
         var seen = Set<String>()
