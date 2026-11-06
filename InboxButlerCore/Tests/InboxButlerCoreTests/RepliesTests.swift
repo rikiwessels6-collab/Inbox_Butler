@@ -43,7 +43,7 @@ final class RepliesTests: XCTestCase {
         let prio = [PrioritySender(input: "sam@work.com")!]
         let plan = FollowUpPlanner.plan(awaiting: [toVIP, toOther], accounts: [acct], priority: prio, alreadyNotified: [])
         XCTAssertEqual(plan.count, 1)
-        XCTAssertEqual(plan[0].title, "No reply yet from sam")
+        XCTAssertEqual(plan[0].title, "No reply yet from sam@work.com")
         XCTAssertEqual(plan[0].body, "Contract")
         XCTAssertTrue(FollowUpPlanner.plan(awaiting: [toVIP], accounts: [acct], priority: prio,
                                            alreadyNotified: [FollowUpPlanner.idPrefix + toVIP.id]).isEmpty)
