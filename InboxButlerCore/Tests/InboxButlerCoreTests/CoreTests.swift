@@ -46,4 +46,14 @@ final class CoreTests: XCTestCase {
         XCTAssertTrue(store.save(snap))
         XCTAssertEqual(store.load(), snap)
     }
+
+    func testSnapshotBuilderPicksUrgentUnreadAndCountsReplies() {
+        let a = account(0)
+        var urgent = message(a, "u", minutesAgo: 1); urgent.importance = 0.9; urgent.awaitingReply = true
+        var read = message(a, "r", minutesAgo: 2); read.importance = 0.95; read.isRead = true
+        var low = message(a, "l", minutesAgo: 3); low.importance = 0.2
+        let snap = WidgetSnapshot.make(messages: [urgent, read, low], accounts: [a])
+        XCTAssertEqual(snap.urgentEmails.map(\.subject), ["u"])
+        XCTAssertEqual(snap.repliesWaiting, 1)
+    }
 }

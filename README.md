@@ -5,62 +5,63 @@ one inbox and does the admin for you: it reads attachments, proposes calendar
 events, drafts replies in your own writing style, and surfaces what matters in a
 widget.
 
-> **Status: scaffold.** The app shell runs on mock data. No real mail provider is
+> **Status: scaffold.** The app shell and widget run on mock data. No real mail provider is
 > wired up yet. See [ARCHITECTURE.md](ARCHITECTURE.md) for the plan and open questions.
 
 ## Repository layout
 
 ```
+project.yml             XcodeGen spec: generates InboxButler.xcodeproj (app + widget)
 InboxButlerCore/        Local Swift package: all shared logic (models, providers,
-                        sync, AI protocol, style profile, widget snapshot).
-                        Builds in Swift Playgrounds *and* Xcode.
-InboxButler.swiftpm/    The app, as a Swift Playgrounds-compatible package.
-                        SwiftUI only; depends on InboxButlerCore.
-Widget/                 WidgetKit extension sources. NOT part of the .swiftpm
-                        (Swift Playgrounds cannot build extensions). Xcode only.
+                        sync, AI protocol, style profile, widget snapshot). No UI.
+InboxButler/            The iOS app target (SwiftUI).
+InboxButlerWidget/      WidgetKit extension (small, medium, lock screen).
 README.md
 ARCHITECTURE.md
 ```
 
-## Building
+Target: **Xcode, iOS 17+, distributed through TestFlight.**
 
-### Swift Playgrounds (iPad)
-1. Put the whole repo somewhere Playgrounds can open (iCloud Drive or Files).
-2. Open `InboxButler.swiftpm`.
-3. It depends on `../InboxButlerCore` by relative path. If Playgrounds will not
-   resolve a local path dependency, see "Open questions" in ARCHITECTURE.md
-   (fallback: reference the Core package by Git URL).
-4. Run. You get the account list and a unified inbox with mock data.
+## Building (Mac with Xcode 15+)
 
-### Xcode (Mac)
-1. Open `InboxButler.swiftpm` directly in Xcode (it opens as a package app), or
-   create an iOS App project and add `InboxButlerCore` as a local package.
-2. Widget setup is **Xcode only**, see below.
+```bash
+brew install xcodegen
+xcodegen generate
+open InboxButler.xcodeproj
+```
 
-## Enabling the widget (Xcode only)
+Before the first build, replace the placeholders (all in `project.yml` unless noted):
 
-Swift Playgrounds cannot build widget extensions, so the widget lives outside the
-`.swiftpm`. The app works fine without it. To turn it on you need a Mac with Xcode
-and a paid Apple Developer account (App Groups need one):
+| Placeholder | Where |
+|---|---|
+| `DEVELOPMENT_TEAM` (your team id) | `project.yml` |
+| `com.example.InboxButler` (bundle id); widget must be `<app id>.Widget` | `project.yml` |
+| `group.com.example.InboxButler` (App Group) | `project.yml` (both targets) **and** `WidgetSnapshotStore.appGroupID` in Core |
 
-1. Create an Xcode project (iOS App, SwiftUI) and drag in the contents of
-   `InboxButler.swiftpm` (or keep using the package app and add it to a
-   workspace; an Xcode project is simpler for extensions).
-2. Add the local package `InboxButlerCore` to the project.
-3. **File > New > Target > Widget Extension**. Name it `InboxButlerWidget`.
-   Untick "Include Live Activity" and "Include Configuration App Intent".
-4. Delete the generated Swift files and add the files from `Widget/InboxButlerWidget/`
-   to that target. Also link `InboxButlerCore` to the widget target.
-5. Signing & Capabilities, on **both** the app target and the widget target:
-   add **App Groups** and tick the same group, e.g. `group.<your.bundle.id>`.
-6. Set that group id in `WidgetSnapshotStore.appGroupID`
-   (`InboxButlerCore/Sources/InboxButlerCore/Widget/WidgetSnapshot.swift`).
-7. Run the app once so it writes a snapshot, then add the widget from the
-   Home Screen / Lock Screen widget gallery.
+Then in the Apple Developer portal register the App Group and both bundle ids
+(Xcode's automatic signing does this for you once the team is set). Run on a
+device or simulator: you get the account list and a unified inbox on mock data,
+and the widget fills from the same data.
 
-The app never talks to the widget directly. It writes a small JSON snapshot into
-the shared App Group container and asks WidgetKit to reload timelines. The widget
-only reads that file.
+Run the Core tests with `cd InboxButlerCore && swift test` (or in Xcode).
+
+If you would rather not use XcodeGen, create an iOS App + Widget Extension in
+Xcode by hand, add `InboxButlerCore` as a local package, and drag in the two
+source folders. `project.yml` documents the exact settings and entitlements.
+
+## TestFlight checklist
+
+1. Paid Apple Developer Program membership.
+2. Set the placeholders above; register the App Group.
+3. Add a 1024x1024 icon to `InboxButler/Assets.xcassets/AppIcon.appiconset`.
+4. In App Store Connect, create the app record with your bundle id.
+5. Xcode: Product > Archive > Distribute App > TestFlight.
+6. Internal testers (up to 100, members of your team) get builds immediately.
+   External testers require a short Beta App Review.
+7. Export compliance: `ITSAppUsesNonExemptEncryption` is set to `false` because the app
+   only uses OS-provided HTTPS. Confirm that stays true.
+8. Privacy: `PrivacyInfo.xcprivacy` is included (no tracking, no collected data). If an
+   AI proxy is added, revisit it and the App Privacy answers.
 
 ## What leaves the device
 

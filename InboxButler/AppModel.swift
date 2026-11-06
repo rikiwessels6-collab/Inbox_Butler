@@ -1,5 +1,6 @@
 import SwiftUI
 import InboxButlerCore
+import WidgetKit
 
 /// Holds app-wide state for the UI: accounts, the merged inbox, sync errors.
 /// Uses mock providers for now; real providers replace them one at a time.
@@ -31,6 +32,16 @@ final class AppModel {
         let result = await engine.refresh()
         messages = result.messages
         errors = result.errors
+        publishWidgetSnapshot()
+    }
+
+    /// Writes the small summary the widget reads (App Group file) and asks
+    /// WidgetKit to refresh. Contains sender/subject text; see README privacy notes.
+    private func publishWidgetSnapshot() {
+        let snapshot = WidgetSnapshot.make(messages: messages, accounts: accounts)
+        if WidgetSnapshotStore().save(snapshot) {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     /// Local-only: marks read in the app. Never changes the real mailbox.

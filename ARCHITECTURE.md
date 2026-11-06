@@ -2,11 +2,10 @@
 
 ## Goals and constraints
 
-- Build and run the main app in **Swift Playgrounds** on iPad.
-- All shared logic in a separate local package, `InboxButlerCore`, usable from
-  Playgrounds or Xcode.
-- Widget extension is separate (Playgrounds cannot build extensions); shared via
-  an App Group.
+- Xcode project (generated from `project.yml`), distributed via **TestFlight**.
+- All shared logic in a separate local package, `InboxButlerCore`, shared by the
+  app and the widget extension.
+- Widget extension is its own target; data is shared via an App Group.
 - Offline-first, SwiftData, secrets in Keychain only.
 - Read-only mail access first. Never send/delete/archive without explicit user action.
 - On-device processing where possible. No API keys in the app.
@@ -27,10 +26,10 @@ InboxButlerCore  (library, iOS 17+/macOS 14+, no UI)
   Drafts/        ReplyDraft (local only; no send path)
   Widget/        WidgetSnapshot + WidgetSnapshotStore (App Group JSON)
 
-InboxButler.swiftpm  (app, SwiftUI, Playgrounds-compatible)
+InboxButler  (app target, SwiftUI)
   App entry, AppModel, AccountListView, UnifiedInboxView, MessageDetailView
 
-Widget/InboxButlerWidget  (Xcode only; reads WidgetSnapshot)
+InboxButlerWidget  (widget extension; reads WidgetSnapshot)
 ```
 
 ## Module plan
@@ -44,7 +43,7 @@ Widget/InboxButlerWidget  (Xcode only; reads WidgetSnapshot)
 | Calendar | Turn extracted dates into `EventProposal`; EventKit write only after user confirms | Protocol only |
 | StyleProfile | Learn tone, greeting/sign-off, length, phrases from Sent mail, on-device; store locally | Model + store only |
 | Drafts | Generate reply with style profile; user reviews; never auto-sent | Model only |
-| Widget | Snapshot written by app, read by WidgetKit extension | Snapshot + widget sources done |
+| Widget | Snapshot written by app, read by WidgetKit extension | Snapshot builder, app publisher and widget done (mock data) |
 | AI | `AIService` protocol: summary, importance, event extraction, drafting | Protocol + "not configured" stub |
 
 ### Provider abstraction
@@ -72,7 +71,7 @@ into SwiftData; Keychain only (`KeychainStore`).
 
 ### Widget data flow
 
-App sync -> compute `WidgetSnapshot` (urgent emails, today's events, replies
+App sync -> `WidgetSnapshot.make(...)` (urgent emails, today's events, replies
 waiting) -> write JSON to App Group container -> `WidgetCenter.reloadAllTimelines()`.
 The widget extension only reads. Snapshots hold subjects and sender names; if you
 would rather keep even those off the Lock Screen, the widget can show counts only
@@ -123,7 +122,8 @@ choose the proxy option, AI requests. See the table in README.md. Rules:
    reversed-client-id URL scheme.
 5. Sign in from the app; accept the "unverified app" warning.
 6. Expect weekly re-auth while in Testing mode.
-7. TestFlight: needs a paid Apple Developer account; add yourself as internal tester.
+7. TestFlight: see the checklist in README.md. Internal testing needs no Beta App
+   Review, which suits private use.
 
 **For a public release (not planned):** move consent screen to Production, submit
 for OAuth verification, and pass the annual CASA security assessment required for
@@ -142,31 +142,31 @@ demo video. Ask whether you want to pursue this before investing.
    - Hybrid is possible (on-device first, proxy opt-in per account). I have **not**
      implemented either; only the protocol exists.
 2. **First provider to wire up.** Suggested: Gmail (REST API, simple JSON, easiest).
-3. **IMAP library.** Pull in a dependency (e.g. `swift-nio-imap`) or write a minimal
-   client on `Network.framework`? Adding a third-party dependency may complicate
-   Swift Playgrounds.
+3. **IMAP library.** Now that third-party packages are fine: use `swift-nio-imap`
+   (parser/codec only, you still write the connection and session logic) or write a
+   minimal client on `Network.framework`? I lean towards `swift-nio-imap`.
 4. **Bundle id, team id and App Group id.** Placeholders (`com.example.InboxButler`,
-   `group.com.example.InboxButler`) are in the code.
-5. **Local path dependency in Playgrounds.** `.swiftpm` references `../InboxButlerCore`.
-   If Playgrounds will not resolve it on your iPad, the fallback is a Git URL
-   dependency on this GitHub repo. Tell me what you see when you first open it.
-6. **OAuth redirect in Playgrounds.** Custom URL schemes for OAuth callbacks may be
-   limited in Playgrounds app packages. `ASWebAuthenticationSession` with a callback
-   scheme may still work; if not, sign-in for Google/Microsoft may need the Xcode build.
+   `group.com.example.InboxButler`) are in `project.yml` and Core.
+5. **Project generation.** I used XcodeGen (`project.yml`) because I cannot author a
+   reliable `.xcodeproj` from Linux. If you prefer a committed `.xcodeproj`, generate
+   it once on your Mac and commit it.
+6. **OAuth sign-in.** Google and Microsoft will use `ASWebAuthenticationSession` with
+   PKCE and a custom URL scheme per provider (added to the app's Info.plist when that
+   provider is wired up).
 7. **Widget privacy.** Show sender/subject on the Lock Screen, or counts only?
-8. **Minimum OS.** Currently iOS 17 (SwiftData, Observation). Foundation Models
-   would need iOS 26 for that code path (guarded with `#available`).
+8. **Minimum OS.** Currently iOS 17 (SwiftData, Observation, interactive widgets).
+   Foundation Models would need iOS 26 for that code path (guarded with `#available`).
 9. **Mail you reply to.** Drafts stay in-app. Later: save as a provider draft
    (needs `gmail.compose`), or hand off via a `mailto:`/share sheet. Which?
 
 ## Build order proposal
 
-1. Scaffold + mock shell (this commit series).
+1. Scaffold + mock shell + widget (done).
 2. First real provider (your pick), with SwiftData cache and Keychain tokens.
 3. Remaining providers.
 4. Attachment text extraction + event proposals + EventKit confirm flow.
 5. Style profile learning + drafts.
-6. Widget snapshot population + Xcode widget enablement.
+6. Widget fed by real data (publisher already in place).
 7. AI layer implementation (after you choose).
 
 > Note: the code in this repo was written without a Swift toolchain available, so

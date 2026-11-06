@@ -2,8 +2,7 @@ import WidgetKit
 import SwiftUI
 import InboxButlerCore
 
-// XCODE ONLY. Swift Playgrounds cannot build widget extensions.
-// Setup steps: see "Enabling the widget" in the repo README.md.
+// Widget extension target (see project.yml). Needs the App Group set up: see README.md.
 // This target links InboxButlerCore and reads the snapshot the app writes into
 // the shared App Group. It never touches mail, tokens or the database.
 

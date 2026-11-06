@@ -40,10 +40,35 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         repliesWaiting: 2)
 }
 
+extension WidgetSnapshot {
+    /// Builds the widget content from the current inbox.
+    /// - Urgent: unread, importance >= 0.7, most important first (max 5).
+    /// - Events: non-dismissed proposals/confirmed events starting today.
+    /// - Replies waiting: messages flagged `awaitingReply`.
+    public static func make(messages: [MailMessage], accounts: [MailAccount],
+                            events: [EventProposal] = [], now: Date = Date(),
+                            calendar: Calendar = .current) -> WidgetSnapshot {
+        let labels = Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0.label) })
+        let urgent = messages
+            .filter { !$0.isRead && ($0.importance ?? 0) >= 0.7 }
+            .sorted { ($0.importance ?? 0) > ($1.importance ?? 0) }
+            .prefix(5)
+            .map { EmailItem(id: $0.id, sender: $0.from.display, subject: $0.subject,
+                             accountLabel: labels[$0.accountID] ?? "") }
+        let today = events
+            .filter { $0.status != .dismissed && calendar.isDate($0.start, inSameDayAs: now) }
+            .sorted { $0.start < $1.start }
+            .map { EventItem(id: $0.id.uuidString, title: $0.title, start: $0.start) }
+        return WidgetSnapshot(urgentEmails: Array(urgent), todaysEvents: today,
+                              repliesWaiting: messages.filter(\.awaitingReply).count,
+                              generatedAt: now)
+    }
+}
+
 /// Reads/writes the snapshot in the shared App Group container.
 public struct WidgetSnapshotStore: Sendable {
-    /// PLACEHOLDER: replace with your App Group id (same one ticked in Xcode
-    /// Signing & Capabilities on both the app and the widget target).
+    /// PLACEHOLDER: replace with your App Group id (must match project.yml
+    /// entitlements for both the app and the widget target).
     public static let appGroupID = "group.com.example.InboxButler"
 
     private let fileURL: URL?

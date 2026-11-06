@@ -1,0 +1,79 @@
+# XcodeGen spec. Generate the Xcode project on a Mac with:
+#   brew install xcodegen && xcodegen generate && open InboxButler.xcodeproj
+# The generated .xcodeproj is not committed; this file is the source of truth.
+#
+# BEFORE FIRST BUILD, replace the placeholders:
+#   DEVELOPMENT_TEAM          your 10-character Apple team id
+#   com.example.InboxButler   your bundle id (widget id must be "<app id>.Widget")
+#   group.com.example.InboxButler  your App Group id. Must ALSO match
+#       WidgetSnapshotStore.appGroupID in InboxButlerCore/.../Widget/WidgetSnapshot.swift
+name: InboxButler
+options:
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: ""
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  InboxButlerCore:
+    path: InboxButlerCore
+targets:
+  InboxButler:
+    type: application
+    platform: iOS
+    sources: [InboxButler]
+    dependencies:
+      - package: InboxButlerCore
+      - target: InboxButlerWidget      # embeds the widget extension
+    entitlements:
+      path: InboxButler/InboxButler.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.example.InboxButler
+    info:
+      path: InboxButler/Info.plist
+      properties:
+        CFBundleDisplayName: Inbox Butler
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCalendarsFullAccessUsageDescription: >-
+          Inbox Butler proposes calendar events found in your email. Nothing is
+          added until you confirm each one.
+        # App only uses OS-provided HTTPS/TLS, which is exempt. Confirm before
+        # submitting to App Store Connect.
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.InboxButler
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: NO
+  InboxButlerWidget:
+    type: app-extension
+    platform: iOS
+    sources: [InboxButlerWidget]
+    dependencies:
+      - package: InboxButlerCore
+    entitlements:
+      path: InboxButlerWidget/InboxButlerWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.example.InboxButler
+    info:
+      path: InboxButlerWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Inbox Butler
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.InboxButler.Widget
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES
