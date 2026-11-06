@@ -25,7 +25,9 @@ final class CoreTests: XCTestCase {
     func testFailingProviderDoesNotBlockOthers() async {
         let a = account(0), b = account(1)
         let engine = SyncEngine(providers: [
-            GmailProvider(account: a),   // stub: throws notImplemented
+            // Not signed in (no tokens in the store): throws notAuthorized.
+            GmailProvider(account: a, tokens: GoogleTokenManager(accountID: a.id, auth: GoogleAuth(),
+                                                                 secrets: InMemorySecretStore())),
             MockMailProvider(account: b, messages: [message(b, "ok", minutesAgo: 1)])
         ])
         let result = await engine.refresh()
