@@ -8,8 +8,12 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         public var sender: String
         public var subject: String
         public var accountLabel: String
-        public init(id: String, sender: String, subject: String, accountLabel: String) {
+        public var isPriority: Bool
+        public var receivedAt: Date
+        public init(id: String, sender: String, subject: String, accountLabel: String,
+                    isPriority: Bool = false, receivedAt: Date = Date()) {
             self.id = id; self.sender = sender; self.subject = subject; self.accountLabel = accountLabel
+            self.isPriority = isPriority; self.receivedAt = receivedAt
         }
     }
     public struct EventItem: Codable, Equatable, Identifiable, Sendable {
@@ -24,10 +28,13 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public var urgentEmails: [EmailItem]
     public var todaysEvents: [EventItem]
     public var repliesWaiting: Int
+    /// Unread mail from priority senders (may exceed the items listed).
+    public var priorityUnreadCount: Int
     public var generatedAt: Date
 
     public init(urgentEmails: [EmailItem] = [], todaysEvents: [EventItem] = [],
-                repliesWaiting: Int = 0, generatedAt: Date = Date()) {
+                repliesWaiting: Int = 0, priorityUnreadCount: Int = 0, generatedAt: Date = Date()) {
+        self.priorityUnreadCount = priorityUnreadCount
         self.urgentEmails = urgentEmails
         self.todaysEvents = todaysEvents
         self.repliesWaiting = repliesWaiting
@@ -42,25 +49,36 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
 
 extension WidgetSnapshot {
     /// Builds the widget content from the current inbox.
-    /// - Urgent: unread, importance >= 0.7, most important first (max 5).
+    /// - Urgent: unread AND (from a priority sender OR importance >= 0.7).
+    ///   Priority senders first, then by importance, then newest (max 5).
     /// - Events: non-dismissed proposals/confirmed events starting today.
     /// - Replies waiting: messages flagged `awaitingReply`.
     public static func make(messages: [MailMessage], accounts: [MailAccount],
-                            events: [EventProposal] = [], now: Date = Date(),
+                            events: [EventProposal] = [], priority: [PrioritySender] = [],
+                            now: Date = Date(),
                             calendar: Calendar = .current) -> WidgetSnapshot {
         let labels = Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0.label) })
-        let urgent = messages
-            .filter { !$0.isRead && ($0.importance ?? 0) >= 0.7 }
-            .sorted { ($0.importance ?? 0) > ($1.importance ?? 0) }
+        let unread = messages.filter { !$0.isRead }
+        func isPriority(_ m: MailMessage) -> Bool { priority.contains(address: m.from.address) }
+        let urgent = unread
+            .filter { isPriority($0) || ($0.importance ?? 0) >= 0.7 }
+            .sorted {
+                let (p0, p1) = (isPriority($0), isPriority($1))
+                if p0 != p1 { return p0 }
+                if ($0.importance ?? 0) != ($1.importance ?? 0) { return ($0.importance ?? 0) > ($1.importance ?? 0) }
+                return $0.receivedAt > $1.receivedAt
+            }
             .prefix(5)
             .map { EmailItem(id: $0.id, sender: $0.from.display, subject: $0.subject,
-                             accountLabel: labels[$0.accountID] ?? "") }
+                             accountLabel: labels[$0.accountID] ?? "",
+                             isPriority: isPriority($0), receivedAt: $0.receivedAt) }
         let today = events
             .filter { $0.status != .dismissed && calendar.isDate($0.start, inSameDayAs: now) }
             .sorted { $0.start < $1.start }
             .map { EventItem(id: $0.id.uuidString, title: $0.title, start: $0.start) }
         return WidgetSnapshot(urgentEmails: Array(urgent), todaysEvents: today,
                               repliesWaiting: messages.filter(\.awaitingReply).count,
+                              priorityUnreadCount: unread.filter(isPriority).count,
                               generatedAt: now)
     }
 }
