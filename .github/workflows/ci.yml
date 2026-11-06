@@ -12,26 +12,30 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - run: xcodebuild -version
       - name: Run InboxButlerCore tests
         working-directory: InboxButlerCore
-        run: swift test 2>&1 | tail -n 300
+        run: |
+          swift test > ../core.log 2>&1 && status=0 || status=$?
+          echo "---- errors ----"; grep -E "error:|failed|Fatal" ../core.log | sort -u | head -60
+          echo "---- tail ----"; tail -n 25 ../core.log
+          exit $status
 
   app-build:
     name: Build app + widget (simulator)
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - run: xcodebuild -version
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate Xcode project
         run: xcodegen generate
       - name: Build
         run: |
-          set -o pipefail
           xcodebuild build \
             -project InboxButler.xcodeproj \
             -scheme InboxButler \
             -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | tail -n 400
+            CODE_SIGNING_ALLOWED=NO > build.log 2>&1 && status=0 || status=$?
+          echo "---- errors ----"; grep -E "error:" build.log | sort -u | head -60
+          echo "---- tail ----"; tail -n 15 build.log
+          exit $status

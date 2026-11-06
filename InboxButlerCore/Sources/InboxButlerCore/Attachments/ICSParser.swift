@@ -59,7 +59,7 @@ public enum ICSParser {
 
     static func unescape(_ s: String) -> String {
         s.replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\N", with: "\n")
-            .replacingOccurrences(of: "\\,", with: ",").replacingOccurrences(of: "\;", with: ";")
+            .replacingOccurrences(of: "\\,", with: ",").replacingOccurrences(of: "\\;", with: ";")
             .replacingOccurrences(of: "\\\\", with: "\\")
     }
 
