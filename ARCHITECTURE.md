@@ -36,8 +36,8 @@ InboxButlerWidget  (widget extension; reads WidgetSnapshot)
 
 | Module | Responsibility | State |
 |---|---|---|
-| Accounts | Account list, sign-in flows, credentials in Keychain | Models + Keychain done; sign-in stubs |
-| Sync | Per-account incremental sync, merge, dedupe, errors per account | Engine done against mock |
+| Accounts | Account list, sign-in flows, credentials in Keychain | Gmail sign-in (PKCE, read-only) done; others stubbed |
+| Sync | Per-account sync, merge, dedupe, errors per account, SwiftData offline cache | Done for Gmail (re-reads newest 50; historyId incremental sync later) |
 | Inbox | Unified list, account badge, read state | UI done on mock data |
 | Attachments | Download on demand; PDF (PDFKit), images (Vision OCR), `.ics`, Word (`.docx` is zipped XML) text extraction | Planned |
 | Calendar | Turn extracted dates into `EventProposal`; EventKit write only after user confirms | Protocol only |
@@ -61,12 +61,12 @@ Deliberately there is **no** send/delete/archive/move requirement. Adding any
 mutating capability later means adding a new, separate protocol that the UI only
 calls from an explicit user action.
 
-### Storage (planned)
+### Storage
 
-SwiftData models mirror `MailMessage` (`StoredMessage`) plus extracted events and
-drafts. The app reads the UI from SwiftData and the SyncEngine writes into it, so
-the inbox works offline. Deferred until the first real provider lands, so the
-schema is shaped by real data rather than guessed. Tokens and passwords never go
+`MessageCache` (SwiftData, `StoredMessage`) mirrors `MailMessage`. At launch the UI
+shows the cache instantly; a refresh updates it per account (a failing/offline
+account keeps its cached mail). Accounts (no secrets) are in `Accounts.json`.
+Extracted events and drafts get SwiftData models when those modules land. Tokens and passwords never go
 into SwiftData; Keychain only (`KeychainStore`).
 
 ### Widget data flow

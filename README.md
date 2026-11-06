@@ -5,8 +5,9 @@ one inbox and does the admin for you: it reads attachments, proposes calendar
 events, drafts replies in your own writing style, and surfaces what matters in a
 widget.
 
-> **Status: scaffold.** The app shell and widget run on mock data. No real mail provider is
-> wired up yet. See [ARCHITECTURE.md](ARCHITECTURE.md) for the plan and open questions.
+> **Status: Gmail works (read-only), other providers are stubs.** With no account connected
+> the app shows demo data. See [docs/SETUP_GOOGLE.md](docs/SETUP_GOOGLE.md) to connect Gmail.
+> See [ARCHITECTURE.md](ARCHITECTURE.md) for the plan and open questions.
 
 ## Repository layout
 
@@ -18,6 +19,7 @@ InboxButler/            The iOS app target (SwiftUI).
 InboxButlerWidget/      WidgetKit extension (small, medium, lock screen).
 README.md
 ARCHITECTURE.md
+docs/SETUP_GOOGLE.md   One-time Google Cloud setup for Gmail sign-in
 ```
 
 Target: **Xcode, iOS 17+, distributed through TestFlight.**
