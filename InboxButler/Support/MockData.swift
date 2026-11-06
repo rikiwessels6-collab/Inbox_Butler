@@ -27,14 +27,14 @@ enum MockData {
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
         let longDate = DateFormatter(); longDate.locale = Locale(identifier: "en_US_POSIX"); longDate.dateFormat = "MMMM d, yyyy"
         let stamp = DateFormatter(); stamp.locale = Locale(identifier: "en_US_POSIX"); stamp.dateFormat = "yyyyMMdd"
-        let ics = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Appointment at Dr Patel's Surgery\nDTSTART:\(stamp.string(from: tomorrow))T143000\nDTEND:\(stamp.string(from: tomorrow))T150000\nLOCATION:12 High Street\nEND:VEVENT\nEND:VCALENDAR"
+        let icsText = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Appointment at Dr Patel's Surgery\nDTSTART:\(stamp.string(from: tomorrow))T143000\nDTEND:\(stamp.string(from: tomorrow))T150000\nLOCATION:12 High Street\nEND:VEVENT\nEND:VCALENDAR"
         let gmailBodies = ["g1": "Hello,\nYour appointment is confirmed for \(longDate.string(from: tomorrow)) at 2:30 PM.\nPlease arrive 10 minutes early.\nThe attached invite has the details."]
 
         let providers: [any MailProvider] = [
             MockMailProvider(account: gmail, messages: [
                 m(gmail, "g1", "Dr Patel's Surgery", "Appointment confirmed Thu 14:30", "Your appointment is booked for Thursday at 14:30.", hoursAgo: 0.5, importance: 0.8, attachments: [ics]),
                 m(gmail, "g2", "Mum", "Sunday lunch?", "Are you coming on Sunday? Let me know by Friday.", hoursAgo: 5, importance: 0.5, waiting: true)
-            ], bodies: gmailBodies, attachmentData: ["a2": Data(ics.utf8)]),
+            ], bodies: gmailBodies, attachmentData: ["a2": Data(icsText.utf8)]),
             MockMailProvider(account: work, messages: [
                 m(work, "w1", "Sam Rivera", "Contract needs signing today", "Please review and sign before 17:00.", hoursAgo: 1, importance: 0.95, waiting: true, attachments: [pdf]),
                 m(work, "w2", "Team Calendar", "Weekly sync moved to Wed", "The weekly sync is now on Wednesday at 10:00.", hoursAgo: 8, read: true)
