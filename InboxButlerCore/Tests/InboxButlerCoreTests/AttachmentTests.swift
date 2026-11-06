@@ -81,10 +81,7 @@ final class AttachmentTests: XCTestCase {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "MMMM d, yyyy"
         let text = "Payment due \(f.string(from: future))."
         let events = DateEventExtractor.events(in: text, sourceMessageID: "m", referenceDate: ref)
-        let det = try! NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue)
-        let raw = det.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
-            .map { "\(($0 as NSTextCheckingResult).date.map(String.init(describing:)) ?? "nil") dur=\($0.duration)" }
-        XCTAssertEqual(events.first?.isAllDay, true, "DEBUG text=\(text) ref=\(ref) raw=\(raw)")
+        XCTAssertEqual(events.first?.isAllDay, true)
     }
 
     // MARK: docx / zip / html

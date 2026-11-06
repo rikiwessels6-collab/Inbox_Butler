@@ -43,6 +43,12 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        # iPad apps must declare all four orientations (App Store upload check).
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         # Write-only: the app can add events you confirm but cannot read your calendar.
         NSCalendarsWriteOnlyAccessUsageDescription: >-
           Inbox Butler adds events found in your email to your calendar, only

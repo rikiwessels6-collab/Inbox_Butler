@@ -51,11 +51,17 @@ If you would rather not use XcodeGen, create an iOS App + Widget Extension in
 Xcode by hand, add `InboxButlerCore` as a local package, and drag in the two
 source folders. `project.yml` documents the exact settings and entitlements.
 
-## TestFlight checklist
+## TestFlight without a Mac
+
+The repo builds on GitHub's cloud Macs (`.github/workflows/ci.yml` runs on every push and
+checks the app compiles and the tests pass). To send a build to TestFlight from your iPad,
+follow **[docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)**.
+
+## TestFlight checklist (if building on a Mac yourself)
 
 1. Paid Apple Developer Program membership.
 2. Set the placeholders above; register the App Group.
-3. Add a 1024x1024 icon to `InboxButler/Assets.xcassets/AppIcon.appiconset`.
+3. A placeholder icon is included; replace `icon.png` in `InboxButler/Assets.xcassets/AppIcon.appiconset` with your own.
 4. In App Store Connect, create the app record with your bundle id.
 5. Xcode: Product > Archive > Distribute App > TestFlight.
 6. Internal testers (up to 100, members of your team) get builds immediately.
