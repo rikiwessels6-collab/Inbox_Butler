@@ -48,6 +48,8 @@ public struct MailMessage: Identifiable, Hashable, Codable, Sendable {
     public var importance: Double?
     /// True if the user still owes this sender a reply.
     public var awaitingReply: Bool
+    /// Newsletter / mailing list / automated sender.
+    public var isBulk: Bool
 
     /// Unique across accounts (provider ids alone can collide).
     public var id: String { "\(accountID.uuidString)/\(providerMessageID)" }
@@ -55,7 +57,7 @@ public struct MailMessage: Identifiable, Hashable, Codable, Sendable {
     public init(accountID: UUID, providerMessageID: String, threadID: String? = nil,
                 from: MailAddress, to: [MailAddress] = [], subject: String, snippet: String,
                 receivedAt: Date, isRead: Bool = false, attachments: [AttachmentInfo] = [],
-                importance: Double? = nil, awaitingReply: Bool = false) {
+                importance: Double? = nil, awaitingReply: Bool = false, isBulk: Bool = false) {
         self.accountID = accountID
         self.providerMessageID = providerMessageID
         self.threadID = threadID
@@ -68,5 +70,6 @@ public struct MailMessage: Identifiable, Hashable, Codable, Sendable {
         self.attachments = attachments
         self.importance = importance
         self.awaitingReply = awaitingReply
+        self.isBulk = isBulk
     }
 }

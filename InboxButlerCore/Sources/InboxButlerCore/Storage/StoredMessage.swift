@@ -22,6 +22,7 @@ final class StoredMessage {
     var attachmentsJSON: Data
     var importance: Double?
     var awaitingReply: Bool
+    var isBulk: Bool = false
 
     init(_ m: MailMessage) {
         id = m.id
@@ -39,6 +40,7 @@ final class StoredMessage {
         attachmentsJSON = (try? JSONEncoder().encode(m.attachments)) ?? Data()
         importance = m.importance
         awaitingReply = m.awaitingReply
+        isBulk = m.isBulk
     }
 
     /// Refreshes server-owned fields; keeps local-only state (importance, readLocally).
@@ -53,7 +55,8 @@ final class StoredMessage {
         isRead = m.isRead
         attachmentsJSON = (try? JSONEncoder().encode(m.attachments)) ?? Data()
         if let imp = m.importance { importance = imp }
-        awaitingReply = awaitingReply || m.awaitingReply
+        awaitingReply = m.awaitingReply   // derived each refresh by ReplyTracker, never sticky
+        isBulk = m.isBulk
     }
 
     var asMessage: MailMessage {
@@ -63,6 +66,6 @@ final class StoredMessage {
                     subject: subject, snippet: snippet, receivedAt: receivedAt,
                     isRead: isRead || readLocally,
                     attachments: (try? JSONDecoder().decode([AttachmentInfo].self, from: attachmentsJSON)) ?? [],
-                    importance: importance, awaitingReply: awaitingReply)
+                    importance: importance, awaitingReply: awaitingReply, isBulk: isBulk)
     }
 }

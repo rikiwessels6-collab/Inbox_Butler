@@ -172,18 +172,23 @@ public struct GmailProvider: MailProvider {
             raw.payload?.headers?.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.value
         }
         let millis = Double(raw.internalDate ?? "") ?? 0
+        let from = header("From").map { parseAddresses($0).first ?? MailAddress(address: $0) } ?? MailAddress(address: "unknown")
+        let bulk = BulkMailDetector.isBulk(fromAddress: from.address,
+                                           hasListUnsubscribe: header("List-Unsubscribe") != nil,
+                                           hasListID: header("List-Id") != nil,
+                                           precedence: header("Precedence"))
         return MailMessage(
             accountID: accountID,
             providerMessageID: raw.id,
             threadID: raw.threadId,
-            from: header("From").map { parseAddresses($0).first ?? MailAddress(address: $0) }
-                ?? MailAddress(address: "unknown"),
+            from: from,
             to: header("To").map(parseAddresses) ?? [],
             subject: header("Subject").flatMap { $0.isEmpty ? nil : $0 } ?? "(no subject)",
             snippet: decodeEntities(raw.snippet ?? ""),
             receivedAt: Date(timeIntervalSince1970: millis / 1000),
             isRead: !(raw.labelIds ?? []).contains("UNREAD"),
-            attachments: attachments(in: raw.payload)
+            attachments: attachments(in: raw.payload),
+            isBulk: bulk
         )
     }
 
