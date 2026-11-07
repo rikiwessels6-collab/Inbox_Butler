@@ -334,7 +334,7 @@ struct UnifiedInboxView: View {
 
 // MARK: - Row
 
-private struct MessageRow: View {
+struct MessageRow: View {
     let message: MailMessage
     let account: MailAccount?
     let isPriority: Bool

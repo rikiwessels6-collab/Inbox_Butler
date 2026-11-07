@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppTab: Hashable { case inbox, accounts, priority }
+enum AppTab: Hashable { case inbox, calendar, search, accounts, priority }
 
 /// Lets any screen switch tabs (e.g. the demo banner's "Connect an account").
 @Observable
@@ -27,6 +27,12 @@ struct RootView: View {
                 UnifiedInboxView()
                     .tabItem { Label("Inbox", systemImage: "tray.full") }
                     .tag(AppTab.inbox)
+                CalendarTabView()
+                    .tabItem { Label("Calendar", systemImage: "calendar") }
+                    .tag(AppTab.calendar)
+                SearchView()
+                    .tabItem { Label("Search", systemImage: "magnifyingglass") }
+                    .tag(AppTab.search)
                 AccountListView()
                     .tabItem { Label("Accounts", systemImage: "person.crop.circle") }
                     .tag(AppTab.accounts)

@@ -422,6 +422,18 @@ final class AppModel {
         await refreshCalendars()
     }
 
+    /// Events for the Calendar tab (display only; nothing is stored).
+    func calendarEvents(from start: Date, to end: Date) async -> [ExistingEvent] {
+        guard calendarAccess == .granted else { return [] }
+        return await calendarWriter.events(from: start, to: end)
+    }
+
+    /// Events found in email that you haven't added or dismissed yet.
+    func suggestedEvents(from start: Date, to end: Date) -> [EventProposal] {
+        guard !usingDemoData else { return [] }
+        return proposalStore.all().filter { $0.status == .proposed && $0.start >= start && $0.start < end }
+    }
+
     /// Overlaps and "already added?" hints. Informational only: they never block an add.
     func overlap(for proposal: EventProposal) async -> CalendarOverlap {
         guard calendarAccess == .granted else { return .none }
