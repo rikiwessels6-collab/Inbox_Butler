@@ -21,6 +21,10 @@ struct RootView: View {
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     @AppStorage("hasSeenTour") private var hasSeenTour = false
 
+    private var welcomeShowing: Bool { !hasSeenWelcome && model.usingDemoData }
+    private var tourShowing: Bool { hasSeenWelcome && !hasSeenTour }
+    private var lockShowing: Bool { lock.isLocked || (lock.isEnabled && phase != .active) }
+
     var body: some View {
         ZStack {
             TabView(selection: $router.tab) {
@@ -40,18 +44,21 @@ struct RootView: View {
                     .tabItem { Label("Priority", systemImage: "star.circle") }
                     .tag(AppTab.priority)
             }
-            if !hasSeenWelcome && model.usingDemoData {
+            // While a full-screen overlay (welcome, tour, lock) is on top, the app underneath must
+            // not be reachable by VoiceOver or other assistive tools.
+            .accessibilityHidden(welcomeShowing || tourShowing || lockShowing)
+            if welcomeShowing {
                 WelcomeView { withAnimation(.easeInOut(duration: 0.5)) { hasSeenWelcome = true } }
                     .transition(.opacity)
                     .zIndex(1)
             }
-            if hasSeenWelcome && !hasSeenTour {
+            if tourShowing {
                 OnboardingTourView { withAnimation(.easeInOut(duration: 0.5)) { hasSeenTour = true } }
                     .transition(.opacity)
                     .zIndex(1)
             }
             // Also covers the app-switcher snapshot (phase is .inactive while it is taken).
-            if lock.isLocked || (lock.isEnabled && phase != .active) {
+            if lockShowing {
                 LockOverlay { Task { await lock.unlock() } }
             }
         }
