@@ -23,6 +23,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Use the newest Xcode (App Store requires the iOS 26 SDK or later)
+        run: |
+          latest=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$latest" ]; then
+            echo "::error::No Xcode 26 on this runner. Installed versions:"; ls -d /Applications/Xcode*
+            exit 1
+          fi
+          sudo xcode-select -s "$latest/Contents/Developer"
+          xcodebuild -version
+
       - name: Check secrets are set
         run: |
           missing=""
