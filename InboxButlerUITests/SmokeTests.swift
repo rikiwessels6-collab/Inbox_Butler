@@ -12,7 +12,7 @@ final class SmokeTests: XCTestCase {
     /// Skips the first-run welcome screen (it is tested separately below).
     private func launchPastWelcome() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-hasSeenWelcome", "YES"]
+        app.launchArguments += ["-hasSeenWelcome", "YES", "-hasSeenTour", "YES"]
         app.launch()
         return app
     }
@@ -23,7 +23,15 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(app.buttons["Continue with Google"].waitForExistence(timeout: 30), "Welcome screen missing")
         XCTAssertTrue(app.buttons["Continue with iCloud"].exists)
         app.buttons["Look around with demo mail"].tap()
-        XCTAssertTrue(app.tabBars.buttons["Inbox"].waitForExistence(timeout: 30), "App did not open after the welcome")
+        // The guided tour follows: step through every page.
+        XCTAssertTrue(app.buttons["Continue"].waitForExistence(timeout: 30), "Tour did not start")
+        for _ in 0..<5 {
+            app.buttons["Continue"].tap()
+            _ = app.buttons["Continue"].waitForExistence(timeout: 5) || app.buttons["Done"].waitForExistence(timeout: 5)
+        }
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 10), "Tour did not reach its last page")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Inbox"].waitForExistence(timeout: 30), "App did not open after the tour")
     }
 
     func testLaunchShowsInboxAndMainTabs() {

@@ -49,6 +49,8 @@ final class AppModel {
     private(set) var clock = Date()
     /// "Marked done. Undo" banner.
     var undoToast: UndoToast?
+    /// A few lines about the user, used to make drafts more natural.
+    private(set) var writerProfile = WriterProfile()
     /// What the app has learned about how you write (on this device).
     private(set) var styleProfile: StyleProfile?
     /// Calendar access and the calendars events can be added to (iCloud, Google, family...).
@@ -78,6 +80,7 @@ final class AppModel {
     private let analyzer = MessageAnalyzer()
     private let draftStore = DraftStore()
     private let triageStore = TriageStore()
+    private let writerStore = WriterProfileStore()
     private let styleStore = StyleProfileStore()
     private var ai: any AIService = DraftAI.make()
     private var providerByAccount: [UUID: any MailProvider] = [:]
@@ -89,6 +92,7 @@ final class AppModel {
         accounts = accountStore.load()
         styleProfile = styleStore.load()
         triage = triageStore.all()
+        writerProfile = writerStore.load() ?? WriterProfile()
         drafts = Dictionary(draftStore.all().filter { $0.status != .discarded }.map { ($0.inReplyToMessageID, $0) },
                             uniquingKeysWith: { _, new in new })
         configureProviders()
@@ -298,6 +302,11 @@ final class AppModel {
         }
     }
 
+    func saveWriterProfile(_ profile: WriterProfile) {
+        writerProfile = profile
+        writerStore.save(profile)
+    }
+
     // MARK: Triage: Done and Remind me (app-only)
 
     func isHidden(_ message: MailMessage) -> Bool { TriageLogic.isHidden(triage[message.id], now: clock) }
@@ -493,7 +502,8 @@ final class AppModel {
             text = try? await provider.fetchBody(for: message)
         }
         let source = text ?? message.snippet
-        let style = styleStore.load()
+        var style = styleStore.load() ?? StyleProfile()
+        style.aboutUser = writerProfile.summary
         let draft: ReplyDraft
         do {
             draft = try await ai.draftReply(to: message, body: source, style: style)

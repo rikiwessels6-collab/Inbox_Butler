@@ -15,6 +15,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.briefKey) private var morningBrief = false
     @AppStorage(AppSettings.redactKey) private var redactWidget = false
     @AppStorage(AppSettings.lockKey) private var lockEnabled = false
+    @State private var writer = WriterProfile()
 
     var body: some View {
         NavigationStack {
@@ -29,7 +30,8 @@ struct SettingsView: View {
             .navigationTitle("Priority & settings")
             .scrollContentBackground(.hidden)
             .background(Theme.background.ignoresSafeArea())
-            .task { await reloadStatus() }
+            .task { await reloadStatus(); writer = model.writerProfile }
+            .onChange(of: writer) { _, new in model.saveWriterProfile(new) }
         }
     }
 
@@ -109,6 +111,9 @@ struct SettingsView: View {
 
     private var draftingSection: some View {
         Section {
+            TextField("Job title", text: $writer.jobTitle)
+            TextField("Company or organisation", text: $writer.organisation)
+            TextField("About you (one line)", text: $writer.about, axis: .vertical)
             Text(model.aiStatusText).font(.footnote)
             if let style = model.styleProfile {
                 LabeledContent("Learned from", value: "\(style.sampleCount) sent emails")

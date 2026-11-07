@@ -19,6 +19,7 @@ struct RootView: View {
     @Bindable private var router = AppRouter.shared
     @Environment(AppModel.self) private var model
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
+    @AppStorage("hasSeenTour") private var hasSeenTour = false
 
     var body: some View {
         ZStack {
@@ -35,6 +36,11 @@ struct RootView: View {
             }
             if !hasSeenWelcome && model.usingDemoData {
                 WelcomeView { withAnimation(.easeInOut(duration: 0.5)) { hasSeenWelcome = true } }
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
+            if hasSeenWelcome && !hasSeenTour {
+                OnboardingTourView { withAnimation(.easeInOut(duration: 0.5)) { hasSeenTour = true } }
                     .transition(.opacity)
                     .zIndex(1)
             }
