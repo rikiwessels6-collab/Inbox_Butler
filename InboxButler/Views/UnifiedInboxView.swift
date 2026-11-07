@@ -7,9 +7,12 @@ enum InboxFilter: Hashable {
 }
 
 /// Three columns on iPad (filters, mail list, message) that collapse to a normal
-/// stack on iPhone. Search covers every account and works offline.
+/// stack on iPhone, where filter chips sit above the list. Search covers every
+/// account and works offline.
 struct UnifiedInboxView: View {
     @Environment(AppModel.self) private var model
+    @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var filter: InboxFilter? = .all
     @State private var selectedID: String?
     @State private var search = ""
@@ -26,25 +29,32 @@ struct UnifiedInboxView: View {
         }
     }
 
-    // MARK: Columns
+    // MARK: Sidebar (iPad)
 
     private var sidebar: some View {
         List(selection: $filter) {
-            Section("Inbox") {
-                row("All mail", "tray.full", .all, model.messages.filter { !$0.isRead }.count)
-                row("Priority", "star.fill", .priority, model.messages.filter { !$0.isRead && isImportant($0) }.count)
+            Section {
+                row("All mail", "tray.full", .all, unreadCount(.all))
+                row("Priority", "star.fill", .priority, unreadCount(.priority))
                 row("Needs a reply", "arrowshape.turn.up.left", .needsReply, model.messages.filter(\.awaitingReply).count)
                 row("Waiting on others", "clock", .waiting, model.waitingOnOthers.count)
-                row("Newsletters", "newspaper", .newsletters, model.messages.filter { !$0.isRead && $0.isBulk }.count)
+                row("Newsletters", "newspaper", .newsletters, unreadCount(.newsletters))
             }
-            Section("Accounts") {
+            Section {
                 ForEach(model.accounts) { account in
-                    Label(account.label, systemImage: account.kind.symbolName)
-                        .foregroundStyle(account.badgeColor)
-                        .tag(InboxFilter.account(account.id))
+                    Label {
+                        Text(account.label)
+                    } icon: {
+                        Image(systemName: account.kind.symbolName).foregroundStyle(account.badgeColor)
+                    }
+                    .tag(InboxFilter.account(account.id))
                 }
+            } header: {
+                Text("Accounts")
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(Theme.background)
         .navigationTitle("Inbox Butler")
     }
 
@@ -52,49 +62,166 @@ struct UnifiedInboxView: View {
         HStack {
             Label(title, systemImage: icon)
             Spacer()
-            if count > 0 { Text("\(count)").font(.caption).foregroundStyle(.secondary) }
+            if count > 0 { Text("\(count)").font(.caption).foregroundStyle(Theme.muted) }
         }
         .tag(value)
     }
 
+    // MARK: Mail list
+
     private var list: some View {
-        List(items, selection: $selectedID) { message in
-            MessageRow(message: message,
-                       account: model.account(for: message.accountID),
-                       isPriority: model.isPriority(message),
-                       showRecipient: filter == .waiting)
+        List(selection: $selectedID) {
+            header
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .selectionDisabled()
+
+            ForEach(items) { message in
+                MessageRow(message: message,
+                           account: model.account(for: message.accountID),
+                           isPriority: model.isPriority(message),
+                           showRecipient: filter == .waiting)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                    .listRowSeparatorTint(Theme.hairline)
+                    .listRowBackground(Color.clear)
+            }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Theme.background)
         .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, prompt: "Search all mail")
         .refreshable { await model.refresh() }
+        .animation(.snappy, value: filter)
+        .toolbar {
+            if sizeClass == .compact && model.accounts.count > 1 {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        ForEach(model.accounts) { account in
+                            Button(account.label) { filter = .account(account.id) }
+                        }
+                        Button("All accounts") { filter = .all }
+                    } label: {
+                        Image(systemName: "person.2")
+                    }
+                }
+            }
+        }
         .overlay {
-            if model.isRefreshing && model.messages.isEmpty { ProgressView() }
-            else if items.isEmpty && !model.isRefreshing {
-                ContentUnavailableView(search.isEmpty ? "Nothing here" : "No results",
-                                       systemImage: search.isEmpty ? "tray" : "magnifyingglass")
+            if model.isRefreshing && model.messages.isEmpty {
+                ProgressView()
+            } else if items.isEmpty && !model.isRefreshing {
+                ContentUnavailableView(search.isEmpty ? "All clear" : "No results",
+                                       systemImage: search.isEmpty ? "tray" : "magnifyingglass",
+                                       description: Text(search.isEmpty ? "Nothing here right now." : "Try a different search."))
             }
         }
     }
+
+    /// Date, greeting, a one-line summary, the demo banner and (iPhone) filter chips.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())
+                    .font(.caption.weight(.semibold)).tracking(0.8).foregroundStyle(Theme.muted)
+                Text(greeting).font(.serif(.largeTitle)).foregroundStyle(Theme.ink)
+                Text(summary).font(.subheadline).foregroundStyle(Theme.muted)
+            }
+
+            if model.usingDemoData { demoBanner }
+            if sizeClass == .compact { chips }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var demoBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "sparkles").foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("You're viewing demo mail").font(.subheadline.weight(.semibold))
+                Text("Connect an account to see your own.").font(.footnote).foregroundStyle(Theme.muted)
+            }
+            Spacer()
+            Button("Connect") { router.tab = .accounts }
+                .buttonStyle(PrimaryButtonStyle())
+        }
+        .card(padding: 14)
+    }
+
+    private var chips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("All", .all)
+                chip("Priority", .priority)
+                chip("Needs reply", .needsReply)
+                chip("Waiting", .waiting)
+                chip("Newsletters", .newsletters)
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    private func chip(_ title: String, _ value: InboxFilter) -> some View {
+        FilterChip(title: title, count: value == .waiting ? model.waitingOnOthers.count : unreadCount(value),
+                   selected: (filter ?? .all) == value) { filter = value }
+    }
+
+    // MARK: Detail
 
     @ViewBuilder
     private var detail: some View {
         if let id = selectedID, let message = (model.messages + model.waitingOnOthers).first(where: { $0.id == id }) {
             MessageDetailView(message: message).id(message.id)   // fresh state per message
         } else {
-            ContentUnavailableView("Select a message", systemImage: "envelope.open")
+            ZStack {
+                Theme.background.ignoresSafeArea()
+                ContentUnavailableView("Select a message", systemImage: "envelope.open")
+            }
         }
     }
 
     // MARK: Data
 
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<12: return "Good morning"
+        case 12..<18: return "Good afternoon"
+        default: return "Good evening"
+        }
+    }
+
+    private var summary: String {
+        let priority = unreadCount(.priority)
+        let reply = model.messages.filter(\.awaitingReply).count
+        var parts: [String] = []
+        if priority > 0 { parts.append("\(priority) priority") }
+        if reply > 0 { parts.append("\(reply) need\(reply == 1 ? "s" : "") a reply") }
+        return parts.isEmpty ? "You're all caught up." : parts.joined(separator: " · ")
+    }
+
     private func isImportant(_ m: MailMessage) -> Bool {
         !m.isBulk && (model.isPriority(m) || (m.importance ?? 0) >= 0.7)
     }
 
+    private func unreadCount(_ value: InboxFilter) -> Int {
+        switch value {
+        case .all: return model.messages.filter { !$0.isRead }.count
+        case .priority: return model.messages.filter { !$0.isRead && isImportant($0) }.count
+        case .newsletters: return model.messages.filter { !$0.isRead && $0.isBulk }.count
+        case .needsReply: return model.messages.filter(\.awaitingReply).count
+        case .waiting: return model.waitingOnOthers.count
+        case .account(let id): return model.messages.filter { !$0.isRead && $0.accountID == id }.count
+        }
+    }
+
     private var title: String {
         switch filter ?? .all {
-        case .all: return "All mail"
+        case .all: return "Inbox"
         case .priority: return "Priority"
         case .needsReply: return "Needs a reply"
         case .newsletters: return "Newsletters"
@@ -121,53 +248,77 @@ struct UnifiedInboxView: View {
     }
 }
 
+// MARK: - Row
+
 private struct MessageRow: View {
     let message: MailMessage
     let account: MailAccount?
     let isPriority: Bool
     let showRecipient: Bool
 
+    private var unread: Bool { !message.isRead && !showRecipient }
+    private var name: String { showRecipient ? "To \(message.to.first?.display ?? "")" : message.from.display }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Circle()
-                .fill(message.isRead || showRecipient ? Color.clear : Color.accentColor)
-                .frame(width: 8, height: 8)
-                .padding(.top, 7)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    if isPriority {
-                        Image(systemName: "star.fill").foregroundStyle(.yellow)
-                            .accessibilityLabel("Priority sender")
-                    }
-                    Text(showRecipient ? "To \(message.to.first?.display ?? "")" : message.from.display)
-                        .font(.headline.weight(message.isRead ? .regular : .semibold))
-                    Spacer()
-                    Text(message.receivedAt, style: .relative)
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Text(message.subject)
-                    .font(.subheadline)
-                    .lineLimit(1)
-                Text(message.snippet)
-                    .font(.caption).foregroundStyle(.secondary)
-                    .lineLimit(2)
-                HStack(spacing: 6) {
-                    if let account { AccountBadge(account: account) }
-                    if !message.attachments.isEmpty {
-                        Image(systemName: "paperclip").font(.caption2).foregroundStyle(.secondary)
-                            .accessibilityLabel("Has attachments")
-                    }
-                    if message.awaitingReply {
-                        Label("Reply waiting", systemImage: "arrowshape.turn.up.left")
-                            .font(.caption2).foregroundStyle(.orange)
-                    }
-                    if message.isBulk {
-                        Label("Newsletter", systemImage: "newspaper").font(.caption2).foregroundStyle(.secondary)
-                    }
+        HStack(alignment: .top, spacing: 12) {
+            ZStack(alignment: .topTrailing) {
+                Avatar(name: showRecipient ? (message.to.first?.display ?? "?") : message.from.display, size: 44)
+                if unread {
+                    Circle().fill(Theme.accent).frame(width: 12, height: 12)
+                        .overlay(Circle().stroke(Theme.background, lineWidth: 2))
+                        .offset(x: 2, y: -2)
+                        .accessibilityLabel("Unread")
                 }
             }
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(name)
+                        .font(.body.weight(unread ? .semibold : .regular))
+                        .foregroundStyle(Theme.ink)
+                        .lineLimit(1)
+                    if isPriority {
+                        Image(systemName: "star.fill").font(.caption2).foregroundStyle(Theme.gold)
+                            .accessibilityLabel("Priority sender")
+                    }
+                    Spacer(minLength: 8)
+                    Text(ShortDate.string(message.receivedAt))
+                        .font(.caption)
+                        .foregroundStyle(unread ? Theme.accent : Theme.muted)
+                }
+                Text(message.subject)
+                    .font(.subheadline.weight(unread ? .medium : .regular))
+                    .foregroundStyle(Theme.ink)
+                    .lineLimit(1)
+                Text(message.snippet)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(2)
+                tags
+            }
         }
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
+        .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private var tags: some View {
+        let hasTags = account != nil || !message.attachments.isEmpty || message.awaitingReply || message.isBulk
+        if hasTags {
+            HStack(spacing: 8) {
+                if let account {
+                    HStack(spacing: 4) {
+                        Circle().fill(account.badgeColor).frame(width: 6, height: 6)
+                        Text(account.label).font(.caption2).foregroundStyle(Theme.muted)
+                    }
+                }
+                if !message.attachments.isEmpty {
+                    Image(systemName: "paperclip").font(.caption2).foregroundStyle(Theme.muted)
+                        .accessibilityLabel("Has attachments")
+                }
+                if message.awaitingReply { PillLabel(text: "Reply", systemImage: "arrowshape.turn.up.left", tint: Theme.warn) }
+                if message.isBulk { PillLabel(text: "Newsletter", systemImage: "newspaper") }
+            }
+            .padding(.top, 2)
+        }
     }
 }
