@@ -2,7 +2,7 @@ import SwiftUI
 import InboxButlerCore
 
 enum InboxFilter: Hashable {
-    case all, priority, needsReply, newsletters, waiting, drafts
+    case all, priority, other, needsReply, newsletters, waiting, drafts, reminders, done
     case account(UUID)
 }
 
@@ -18,6 +18,7 @@ struct UnifiedInboxView: View {
     @State private var search = ""
     @State private var visibility: NavigationSplitViewVisibility = .automatic
     @State private var compactColumn: NavigationSplitViewColumn = .content   // iPhone opens on the list
+    @State private var reminderTarget: MailMessage?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $visibility, preferredCompactColumn: $compactColumn) {
@@ -34,12 +35,17 @@ struct UnifiedInboxView: View {
     private var sidebar: some View {
         List(selection: $filter) {
             Section {
-                row("All mail", "tray.full", .all, unreadCount(.all))
-                row("Priority", "star.fill", .priority, unreadCount(.priority))
-                row("Needs a reply", "arrowshape.turn.up.left", .needsReply, model.messages.filter(\.awaitingReply).count)
-                row("Drafts ready", "square.and.pencil", .drafts, model.drafts.count)
+                row("Inbox", "tray.full", .all, unreadCount(.all))
+                row("Important", "star.fill", .priority, unreadCount(.priority))
+                row("Other", "tray", .other, unreadCount(.other))
+                row("Needs a reply", "arrowshape.turn.up.left", .needsReply, unreadCount(.needsReply))
+                row("Drafts ready", "square.and.pencil", .drafts, unreadCount(.drafts))
                 row("Waiting on others", "clock", .waiting, model.waitingOnOthers.count)
                 row("Newsletters", "newspaper", .newsletters, unreadCount(.newsletters))
+            }
+            Section {
+                row("Reminders", "bell", .reminders, model.snoozedMessages.count)
+                row("Done", "checkmark.circle", .done, 0)
             }
             Section {
                 ForEach(model.accounts) { account in
@@ -82,10 +88,13 @@ struct UnifiedInboxView: View {
                 MessageRow(message: message,
                            account: model.account(for: message.accountID),
                            isPriority: model.isPriority(message),
-                           showRecipient: filter == .waiting)
+                           showRecipient: filter == .waiting,
+                       reminderBack: model.hasResurfaced(message))
                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                     .listRowSeparatorTint(Theme.hairline)
                     .listRowBackground(Color.clear)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) { trailingActions(for: message) }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) { leadingActions(for: message) }
             }
         }
         .listStyle(.plain)
@@ -96,6 +105,16 @@ struct UnifiedInboxView: View {
         .searchable(text: $search, prompt: "Search all mail")
         .refreshable { await model.refresh() }
         .animation(.snappy, value: filter)
+        .overlay(alignment: .bottom) {
+            if let toast = model.undoToast {
+                UndoToastView(toast: toast) { withAnimation(.snappy) { model.undo(toast) } }
+            }
+        }
+        .animation(.snappy, value: model.undoToast)
+        .sensoryFeedback(.success, trigger: model.undoToast?.id)
+        .sheet(item: $reminderTarget) { target in
+            ReminderSheet(message: target) { date in model.remind(target, at: date) }
+        }
         .toolbar {
             if sizeClass == .compact && model.accounts.count > 1 {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -157,19 +176,22 @@ struct UnifiedInboxView: View {
     private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                chip("All", .all)
-                chip("Priority", .priority)
+                chip("Inbox", .all)
+                chip("Important", .priority)
+                chip("Other", .other)
                 chip("Needs reply", .needsReply)
                 chip("Drafts", .drafts)
                 chip("Waiting", .waiting)
                 chip("Newsletters", .newsletters)
+                chip("Reminders", .reminders)
+                chip("Done", .done)
             }
             .padding(.vertical, 2)
         }
     }
 
     private func chip(_ title: String, _ value: InboxFilter) -> some View {
-        FilterChip(title: title, count: value == .waiting ? model.waitingOnOthers.count : unreadCount(value),
+        FilterChip(title: title, count: unreadCount(value),
                    selected: (filter ?? .all) == value) { filter = value }
     }
 
@@ -178,7 +200,7 @@ struct UnifiedInboxView: View {
     @ViewBuilder
     private var detail: some View {
         if let id = selectedID, let message = (model.messages + model.waitingOnOthers).first(where: { $0.id == id }) {
-            MessageDetailView(message: message).id(message.id)   // fresh state per message
+            MessageDetailView(message: message, onTriage: { selectedID = nil }).id(message.id)   // fresh state per message
         } else {
             ZStack {
                 Theme.background.ignoresSafeArea()
@@ -199,9 +221,9 @@ struct UnifiedInboxView: View {
 
     private var summary: String {
         let priority = unreadCount(.priority)
-        let reply = model.messages.filter(\.awaitingReply).count
+        let reply = unreadCount(.needsReply)
         var parts: [String] = []
-        if priority > 0 { parts.append("\(priority) priority") }
+        if priority > 0 { parts.append("\(priority) important") }
         if reply > 0 { parts.append("\(reply) need\(reply == 1 ? "s" : "") a reply") }
         return parts.isEmpty ? "You're all caught up." : parts.joined(separator: " · ")
     }
@@ -211,44 +233,84 @@ struct UnifiedInboxView: View {
     }
 
     private func unreadCount(_ value: InboxFilter) -> Int {
+        let inbox = model.inboxMessages
         switch value {
-        case .all: return model.messages.filter { !$0.isRead }.count
-        case .priority: return model.messages.filter { !$0.isRead && isImportant($0) }.count
-        case .newsletters: return model.messages.filter { !$0.isRead && $0.isBulk }.count
-        case .needsReply: return model.messages.filter(\.awaitingReply).count
+        case .all: return inbox.filter { !$0.isRead }.count
+        case .priority: return inbox.filter { !$0.isRead && isImportant($0) }.count
+        case .other: return inbox.filter { !$0.isRead && !isImportant($0) && !$0.isBulk }.count
+        case .newsletters: return inbox.filter { !$0.isRead && $0.isBulk }.count
+        case .needsReply: return inbox.filter(\.awaitingReply).count
         case .waiting: return model.waitingOnOthers.count
-        case .drafts: return model.drafts.count
-        case .account(let id): return model.messages.filter { !$0.isRead && $0.accountID == id }.count
+        case .drafts: return inbox.filter { model.drafts[$0.id] != nil }.count
+        case .reminders: return model.snoozedMessages.count
+        case .done: return 0
+        case .account(let id): return inbox.filter { !$0.isRead && $0.accountID == id }.count
         }
     }
 
     private var title: String {
         switch filter ?? .all {
         case .all: return "Inbox"
-        case .priority: return "Priority"
+        case .priority: return "Important"
+        case .other: return "Other"
         case .needsReply: return "Needs a reply"
         case .newsletters: return "Newsletters"
         case .waiting: return "Waiting on others"
         case .drafts: return "Drafts ready"
+        case .reminders: return "Reminders"
+        case .done: return "Done"
         case .account(let id): return model.account(for: id)?.label ?? "Account"
         }
     }
 
     private var items: [MailMessage] {
+        let inbox = model.inboxMessages
         let base: [MailMessage]
         switch filter ?? .all {
-        case .all: base = model.messages
-        case .priority: base = model.messages.filter(isImportant)
-        case .needsReply: base = model.messages.filter(\.awaitingReply)
-        case .newsletters: base = model.messages.filter(\.isBulk)
+        case .all: base = inbox
+        case .priority: base = inbox.filter(isImportant)
+        case .other: base = inbox.filter { !isImportant($0) && !$0.isBulk }
+        case .needsReply: base = inbox.filter(\.awaitingReply)
+        case .newsletters: base = inbox.filter(\.isBulk)
         case .waiting: base = model.waitingOnOthers
-        case .drafts: base = model.messages.filter { model.drafts[$0.id] != nil }
-        case .account(let id): base = model.messages.filter { $0.accountID == id }
+        case .drafts: base = inbox.filter { model.drafts[$0.id] != nil }
+        case .reminders: base = model.snoozedMessages
+        case .done: base = model.doneMessages
+        case .account(let id): base = inbox.filter { $0.accountID == id }
         }
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return base }
         return base.filter { m in
             [m.subject, m.snippet, m.from.display, m.from.address].contains { $0.lowercased().contains(q) }
+        }
+    }
+
+    // MARK: Swipe actions (app-only: the mailbox itself is never changed)
+
+    /// Swipe left: mark done (or, in Done / Reminders, put it back in the inbox).
+    @ViewBuilder
+    private func trailingActions(for message: MailMessage) -> some View {
+        switch filter ?? .all {
+        case .waiting:
+            EmptyView()
+        case .done, .reminders:
+            Button { model.restoreToInbox(message) } label: { Label("Back to inbox", systemImage: "tray.and.arrow.down") }
+                .tint(Theme.accent)
+        default:
+            Button { model.markDone(message) } label: { Label("Done", systemImage: "checkmark") }
+                .tint(Theme.good)
+        }
+    }
+
+    /// Swipe right: remind me later.
+    @ViewBuilder
+    private func leadingActions(for message: MailMessage) -> some View {
+        switch filter ?? .all {
+        case .waiting, .done:
+            EmptyView()
+        default:
+            Button { reminderTarget = message } label: { Label("Remind", systemImage: "clock") }
+                .tint(Color(hex: 0x8A63D2))
         }
     }
 }
@@ -260,6 +322,7 @@ private struct MessageRow: View {
     let account: MailAccount?
     let isPriority: Bool
     let showRecipient: Bool
+    var reminderBack: Bool = false
 
     private var unread: Bool { !message.isRead && !showRecipient }
     private var name: String { showRecipient ? "To \(message.to.first?.display ?? "")" : message.from.display }
@@ -307,7 +370,7 @@ private struct MessageRow: View {
 
     @ViewBuilder
     private var tags: some View {
-        let hasTags = account != nil || !message.attachments.isEmpty || message.awaitingReply || message.isBulk
+        let hasTags = account != nil || !message.attachments.isEmpty || message.awaitingReply || message.isBulk || reminderBack
         if hasTags {
             HStack(spacing: 8) {
                 if let account {
@@ -320,6 +383,7 @@ private struct MessageRow: View {
                     Image(systemName: "paperclip").font(.caption2).foregroundStyle(Theme.muted)
                         .accessibilityLabel("Has attachments")
                 }
+                if reminderBack { PillLabel(text: "Reminder", systemImage: "bell.fill", tint: Theme.accent) }
                 if message.awaitingReply { PillLabel(text: "Reply", systemImage: "arrowshape.turn.up.left", tint: Theme.warn) }
                 if message.isBulk { PillLabel(text: "Newsletter", systemImage: "newspaper") }
             }

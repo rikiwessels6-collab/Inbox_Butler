@@ -7,7 +7,10 @@ import InboxButlerCore
 struct MessageDetailView: View {
     @Environment(AppModel.self) private var model
     let message: MailMessage
+    /// Called after Done / Remind so the list can close this message.
+    var onTriage: (() -> Void)? = nil
 
+    @State private var showReminder = false
     @State private var analysis: MessageAnalysis?
     @State private var proposals: [EventProposal] = []
     @State private var isLoading = true
@@ -43,6 +46,12 @@ struct MessageDetailView: View {
         .background(Theme.background.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button { showReminder = true } label: { Image(systemName: "clock") }
+                    .accessibilityLabel("Remind me")
+                Button { model.markDone(message); onTriage?() } label: { Image(systemName: "checkmark.circle") }
+                    .accessibilityLabel("Mark done")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { Task { await showFormatted() } } label: {
@@ -59,6 +68,9 @@ struct MessageDetailView: View {
             }
         }
         .quickLookPreview($previewURL)
+        .sheet(isPresented: $showReminder) {
+            ReminderSheet(message: message) { date in model.remind(message, at: date); onTriage?() }
+        }
         .sheet(isPresented: $showComposer) {
             MailComposer(to: [message.from.address],
                          subject: ReplyFormatter.subject(message.subject),
