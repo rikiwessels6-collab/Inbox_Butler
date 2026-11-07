@@ -5,6 +5,11 @@ name: TestFlight
 
 on:
   workflow_dispatch:
+    inputs:
+      include_widget:
+        description: "Include the widget (needs the App Group set up in the Apple Developer portal). Leave off for the first build."
+        type: boolean
+        default: false
 
 jobs:
   upload:
@@ -32,6 +37,12 @@ jobs:
           if grep -q "YOUR_IOS_CLIENT_ID" InboxButler/Support/AppConfig.swift; then
             echo "::warning::Google client ID not set in AppConfig.swift: Gmail sign-in won't work in this build (see docs/SETUP_GOOGLE.md)."
           fi
+
+      - name: Basic build (no widget, no App Group)
+        if: ${{ !inputs.include_widget }}
+        run: |
+          pip3 install --quiet pyyaml || pip3 install --quiet --break-system-packages pyyaml
+          python3 scripts/make_basic_project.py
 
       - name: Install XcodeGen and generate project
         run: |

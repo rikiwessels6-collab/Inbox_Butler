@@ -70,3 +70,25 @@ jobs:
         with:
           name: ui-test-results
           path: ui.xcresult
+
+  basic-build:
+    name: Basic TestFlight variant builds (no widget)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rewrite project for the basic build
+        run: |
+          pip3 install --quiet pyyaml || pip3 install --quiet --break-system-packages pyyaml
+          python3 scripts/make_basic_project.py
+      - name: Generate and build
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          xcodebuild build \
+            -project InboxButler.xcodeproj \
+            -scheme InboxButler \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO > build.log 2>&1 && status=0 || status=$?
+          echo "---- errors ----"; grep -E "error:" build.log | sort -u | head -40
+          echo "---- tail ----"; tail -n 8 build.log
+          exit $status
