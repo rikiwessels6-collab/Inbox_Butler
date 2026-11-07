@@ -26,6 +26,8 @@ struct SettingsView: View {
                 privacySection
             }
             .navigationTitle("Priority & settings")
+            .scrollContentBackground(.hidden)
+            .background(Theme.background.ignoresSafeArea())
             .task { await reloadStatus() }
         }
     }
