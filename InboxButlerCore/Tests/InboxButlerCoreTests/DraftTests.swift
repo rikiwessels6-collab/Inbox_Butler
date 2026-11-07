@@ -55,7 +55,7 @@ final class DraftTests: XCTestCase {
         XCTAssertTrue(draft.body.hasPrefix("Hi Sam,"))
         XCTAssertTrue(draft.body.hasSuffix("Cheers,"))
         XCTAssertEqual(draft.source, "basic")
-        XCTAssertEqual(draft.inReplyToMessageID, "m")
+        XCTAssertEqual(draft.inReplyToMessageID, msg.id)
     }
 
     func testDraftStoreReplacesPerMessageAndRemoves() {
