@@ -71,6 +71,26 @@ follow **[docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)**.
 8. Privacy: `PrivacyInfo.xcprivacy` is included (no tracking, no collected data). If an
    AI proxy is added, revisit it and the App Privacy answers.
 
+## The Superhuman-style experience (all on-device)
+
+- **Welcome and guided tour.** A full-bleed landscape sign-in, then a short tour with practice emails
+  you can really swipe, an overview of the assistant, and an optional "help it sound like you" step.
+- **Swipe triage.** Swipe **right** to set a reminder (the email leaves the inbox and returns at the top,
+  with a notification), swipe **left** to mark it **Done**. Both have an **Undo** banner. Reminders and
+  Done each have their own list.
+  **Important:** this is app-only. Your real mailbox is never touched, so mail stays in Gmail/iCloud
+  exactly where it was; it just disappears from Inbox Butler until it's due or you restore it. This is
+  deliberate: the app has no permission to archive, delete or move your mail.
+- **Automatic labels.** Each email gets up to two coloured labels (Security, Invoice, Receipt, Travel,
+  Appointment, Meeting, Delivery, To review, Newsletter) from quick on-device rules over the subject,
+  preview and attachments. They're keyword rules, not AI, so they're instant and work offline.
+- **Important / Other / Newsletters split**, plus Needs a reply, Drafts, Reminders and Done.
+- **Calendar tab.** Your real week from every calendar on the device (iCloud, Google, family). Overlapping
+  events sit side by side, so double-bookings stay visible. Events found in your email appear as dashed
+  suggestions. Read for display only; nothing is stored or sent.
+- **Search tab.** Search every account at once, offline, with filters and recent searches.
+- **"All caught up"** shows a landscape instead of an empty list.
+
 ## Inbox, search and reply tracking
 
 - **iPad split view** (filters, list, message) that collapses to a normal stack on iPhone.
