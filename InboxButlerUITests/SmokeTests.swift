@@ -20,17 +20,17 @@ final class SmokeTests: XCTestCase {
     func testFirstLaunchShowsTheWelcomeScreen() {
         let app = XCUIApplication()
         app.launch()
-        XCTAssertTrue(app.buttons["Continue with Google"].waitForExistence(timeout: 30), "Welcome screen missing")
-        XCTAssertTrue(app.buttons["Continue with iCloud"].exists)
-        app.buttons["Look around with demo mail"].tap()
+        XCTAssertTrue(app.buttons["welcome-google"].waitForExistence(timeout: 30), "Welcome screen missing")
+        XCTAssertTrue(app.buttons["welcome-icloud"].exists)
+        app.buttons["welcome-demo"].tap()
         // The guided tour follows: step through every page.
-        XCTAssertTrue(app.buttons["Continue"].waitForExistence(timeout: 30), "Tour did not start")
+        XCTAssertTrue(app.buttons["tour-continue"].waitForExistence(timeout: 30), "Tour did not start")
         for _ in 0..<5 {
-            app.buttons["Continue"].tap()
-            _ = app.buttons["Continue"].waitForExistence(timeout: 5) || app.buttons["Done"].waitForExistence(timeout: 5)
+            app.buttons["tour-continue"].tap()
+            _ = app.buttons["tour-continue"].waitForExistence(timeout: 5) || app.buttons["tour-done"].waitForExistence(timeout: 5)
         }
-        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 10), "Tour did not reach its last page")
-        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["tour-done"].waitForExistence(timeout: 10), "Tour did not reach its last page")
+        app.buttons["tour-done"].tap()
         XCTAssertTrue(app.tabBars.buttons["Inbox"].waitForExistence(timeout: 30), "App did not open after the tour")
     }
 

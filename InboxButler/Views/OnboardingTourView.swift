@@ -200,6 +200,7 @@ struct OnboardingTourView: View {
             .padding(.bottom, 28)
         }
         .preferredColorScheme(.light)
+        .accessibilityAddTraits(.isModal)   // VoiceOver ignores everything behind the tour
         .animation(.smooth(duration: 0.45), value: page)
         .task { await cycleQuestions() }
         .task {
@@ -223,6 +224,7 @@ struct OnboardingTourView: View {
             .accessibilityHidden(true)
             if !isLast {
                 Button("Skip") { finish(saveProfile: false) }
+                    .accessibilityIdentifier("tour-skip")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(Theme.ink)
                     .padding(.horizontal, 14).padding(.vertical, 7)
@@ -249,6 +251,7 @@ struct OnboardingTourView: View {
                 .background(isLast ? Color.white.opacity(0.22) : Color.white.opacity(0.85), in: Capsule())
                 .overlay(Capsule().stroke(Color.white.opacity(isLast ? 0.5 : 0.9), lineWidth: 1))
         }
+        .accessibilityIdentifier(isLast ? "tour-done" : "tour-continue")
         .frame(maxWidth: 640)
     }
 

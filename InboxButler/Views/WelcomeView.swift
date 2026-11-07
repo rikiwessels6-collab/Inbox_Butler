@@ -168,6 +168,7 @@ struct WelcomeView: View {
             .frame(maxWidth: 480)
         }
         .preferredColorScheme(.dark)
+        .accessibilityAddTraits(.isModal)   // VoiceOver ignores everything behind the welcome screen
         .task {
             withAnimation(.easeOut(duration: 1.0)) { appeared = true }
             withAnimation(.easeInOut(duration: 22).repeatForever(autoreverses: true)) { drift = true }
@@ -216,10 +217,12 @@ struct WelcomeView: View {
                 }
             }
             .buttonStyle(GlassButtonStyle())
+            .accessibilityIdentifier("welcome-google")
             .disabled(isSigningIn)
 
             Button { showICloud = true } label: { Text("Continue with iCloud") }
                 .buttonStyle(GlassButtonStyle())
+                .accessibilityIdentifier("welcome-icloud")
 
             Button {
                 AppRouter.shared.tab = .accounts
@@ -236,6 +239,7 @@ struct WelcomeView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.white)
             }
+            .accessibilityIdentifier("welcome-demo")
         }
     }
 

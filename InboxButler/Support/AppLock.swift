@@ -43,5 +43,6 @@ struct LockOverlay: View {
                 Button("Unlock", action: unlock).buttonStyle(.borderedProminent)
             }
         }
+        .accessibilityAddTraits(.isModal)   // VoiceOver can't read the mail behind the lock
     }
 }
