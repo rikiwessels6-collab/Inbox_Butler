@@ -17,6 +17,8 @@ struct RootView: View {
     @Environment(\.scenePhase) private var phase
     @State private var lock = AppLock.shared
     @Bindable private var router = AppRouter.shared
+    @Environment(AppModel.self) private var model
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 
     var body: some View {
         ZStack {
@@ -30,6 +32,11 @@ struct RootView: View {
                 SettingsView()
                     .tabItem { Label("Priority", systemImage: "star.circle") }
                     .tag(AppTab.priority)
+            }
+            if !hasSeenWelcome && model.usingDemoData {
+                WelcomeView { withAnimation(.easeInOut(duration: 0.5)) { hasSeenWelcome = true } }
+                    .transition(.opacity)
+                    .zIndex(1)
             }
             // Also covers the app-switcher snapshot (phase is .inactive while it is taken).
             if lock.isLocked || (lock.isEnabled && phase != .active) {

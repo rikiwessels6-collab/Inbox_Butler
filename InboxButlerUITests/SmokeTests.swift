@@ -9,9 +9,25 @@ final class SmokeTests: XCTestCase {
         app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", s)).firstMatch
     }
 
-    func testLaunchShowsInboxAndMainTabs() {
+    /// Skips the first-run welcome screen (it is tested separately below).
+    private func launchPastWelcome() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-hasSeenWelcome", "YES"]
+        app.launch()
+        return app
+    }
+
+    func testFirstLaunchShowsTheWelcomeScreen() {
         let app = XCUIApplication()
         app.launch()
+        XCTAssertTrue(app.buttons["Continue with Google"].waitForExistence(timeout: 30), "Welcome screen missing")
+        XCTAssertTrue(app.buttons["Continue with iCloud"].exists)
+        app.buttons["Look around with demo mail"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Inbox"].waitForExistence(timeout: 30), "App did not open after the welcome")
+    }
+
+    func testLaunchShowsInboxAndMainTabs() {
+        let app = launchPastWelcome()
         XCTAssertTrue(app.tabBars.buttons["Inbox"].waitForExistence(timeout: 30), "App did not launch to the tab bar")
 
         // Demo mail is listed.
@@ -25,8 +41,7 @@ final class SmokeTests: XCTestCase {
     }
 
     func testOpeningAMessageFindsTheSuggestedEvent() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchPastWelcome()
         XCTAssertTrue(app.tabBars.buttons["Inbox"].waitForExistence(timeout: 30))
         let row = text(app, containing: "Appointment confirmed")
         XCTAssertTrue(row.waitForExistence(timeout: 30), "Demo appointment email missing")
