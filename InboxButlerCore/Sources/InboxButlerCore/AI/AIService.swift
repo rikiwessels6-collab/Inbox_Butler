@@ -10,7 +10,13 @@ public enum AIProcessingLocation: String, Codable, Sendable {
 
 public enum AIServiceError: Error, LocalizedError, Sendable {
     case notConfigured
-    public var errorDescription: String? { "No AI layer has been chosen yet." }
+    case unavailable(String)
+    public var errorDescription: String? {
+        switch self {
+        case .notConfigured: return "This AI feature isn't available."
+        case .unavailable(let why): return why
+        }
+    }
 }
 
 /// The AI layer. DECISION PENDING: on-device Foundation Models vs. backend proxy

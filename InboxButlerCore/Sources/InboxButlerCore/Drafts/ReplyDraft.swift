@@ -11,13 +11,16 @@ public struct ReplyDraft: Identifiable, Hashable, Codable, Sendable {
     public var body: String
     public var status: Status
     public var createdAt: Date
+    /// "on-device" (Apple Intelligence) or "basic" (template). Shown to the user.
+    public var source: String
 
     public init(id: UUID = UUID(), inReplyToMessageID: String, body: String,
-                status: Status = .suggested, createdAt: Date = Date()) {
+                status: Status = .suggested, createdAt: Date = Date(), source: String = "basic") {
         self.id = id
         self.inReplyToMessageID = inReplyToMessageID
         self.body = body
         self.status = status
         self.createdAt = createdAt
+        self.source = source
     }
 }

@@ -10,11 +10,13 @@ public struct StyleProfile: Codable, Hashable, Sendable {
     public var usesEmoji: Bool
     public var commonPhrases: [String]
     public var sampleCount: Int             // sent messages analysed
+    /// A few of the user's own short replies, used as examples when drafting (on-device only).
+    public var exampleReplies: [String]
     public var updatedAt: Date
 
     public init(greetings: [String] = [], signOffs: [String] = [], averageSentenceWords: Double = 0,
                 formality: Double = 0.5, usesEmoji: Bool = false, commonPhrases: [String] = [],
-                sampleCount: Int = 0, updatedAt: Date = Date()) {
+                sampleCount: Int = 0, exampleReplies: [String] = [], updatedAt: Date = Date()) {
         self.greetings = greetings
         self.signOffs = signOffs
         self.averageSentenceWords = averageSentenceWords
@@ -22,6 +24,7 @@ public struct StyleProfile: Codable, Hashable, Sendable {
         self.usesEmoji = usesEmoji
         self.commonPhrases = commonPhrases
         self.sampleCount = sampleCount
+        self.exampleReplies = exampleReplies
         self.updatedAt = updatedAt
     }
 }
