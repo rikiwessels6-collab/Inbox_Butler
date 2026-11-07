@@ -45,8 +45,47 @@ public struct EventProposal: Identifiable, Hashable, Codable, Sendable {
     }
 }
 
+public enum CalendarAccess: Sendable { case notDetermined, granted, denied }
+
+/// A calendar the user can add events to (iCloud, Google, shared family calendars...).
+public struct CalendarInfo: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let title: String
+    public let sourceTitle: String   // "iCloud", "Gmail", ...
+
+    public init(id: String, title: String, sourceTitle: String) {
+        self.id = id; self.title = title; self.sourceTitle = sourceTitle
+    }
+
+    /// "iCloud · Family", or just the title when the source adds nothing.
+    public var displayName: String {
+        sourceTitle.isEmpty || sourceTitle == title ? title : "\(sourceTitle) · \(title)"
+    }
+}
+
+/// An event already in the calendar, read ONLY to show overlaps for an event being added.
+/// It is never stored or sent anywhere.
+public struct ExistingEvent: Hashable, Sendable {
+    public let title: String
+    public let calendarTitle: String
+    public let start: Date
+    public let end: Date
+    public let isAllDay: Bool
+
+    public init(title: String, calendarTitle: String, start: Date, end: Date, isAllDay: Bool) {
+        self.title = title; self.calendarTitle = calendarTitle
+        self.start = start; self.end = end; self.isAllDay = isAllDay
+    }
+}
+
 /// Writes a confirmed proposal to the calendar. Callers must only invoke it after
-/// the user taps "Add" on that specific proposal.
+/// the user taps "Add" on that specific proposal. Clashes with other events NEVER
+/// prevent an add (families have overlapping calendars).
 public protocol CalendarWriter: Sendable {
-    func add(_ proposal: EventProposal) async throws
+    func accessState() async -> CalendarAccess
+    func requestAccess() async -> Bool
+    func calendars() async throws -> [CalendarInfo]
+    /// Events around the proposal's time, for the informational overlap display.
+    func nearbyEvents(for proposal: EventProposal) async -> [ExistingEvent]
+    func add(_ proposal: EventProposal, toCalendar calendarID: String?) async throws
 }
