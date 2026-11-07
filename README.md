@@ -5,7 +5,7 @@ one inbox and does the admin for you: it reads attachments, proposes calendar
 events, drafts replies in your own writing style, and surfaces what matters in a
 widget.
 
-> **Status: Gmail works (read-only), other providers are stubs.** With no account connected
+> **Status: Gmail and iCloud Mail (read-only) are built; Outlook is not yet.** With no account connected
 > the app shows demo data. See [docs/SETUP_GOOGLE.md](docs/SETUP_GOOGLE.md) to connect Gmail.
 > See [ARCHITECTURE.md](ARCHITECTURE.md) for the plan and open questions.
 

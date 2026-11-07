@@ -7,6 +7,7 @@ struct AccountListView: View {
     @State private var isSigningIn = false
     @State private var message: String?
     @State private var pendingRemoval: MailAccount?
+    @State private var imapSheet: AccountKind?
 
     var body: some View {
         NavigationStack {
@@ -29,6 +30,7 @@ struct AccountListView: View {
             }
             .background(Theme.background.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $imapSheet) { kind in AddIMAPAccountView(kind: kind) }
             .alert("Accounts", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -41,7 +43,7 @@ struct AccountListView: View {
                     if let account = pendingRemoval { Task { await model.removeAccount(account) } }
                 }
             } message: {
-                Text("Deletes the saved sign-in and the cached mail on this device, and tells Google to revoke access. Your mailbox itself is not touched.")
+                Text("Deletes the saved sign-in and the cached mail on this device (and, for Google, revokes access). Your mailbox itself is not touched.")
             }
         }
     }
@@ -96,16 +98,16 @@ struct AccountListView: View {
                     Task { await addGmail() }
                 }
                 Divider().overlay(Theme.hairline).padding(.leading, 70)
-                providerRow(.icloud, title: "iCloud Mail", subtitle: "Needs an app-specific password", soon: true) {
-                    message = "iCloud Mail is the next thing being built."
+                providerRow(.icloud, title: "iCloud Mail", subtitle: "Uses an app-specific password") {
+                    imapSheet = .icloud
                 }
                 Divider().overlay(Theme.hairline).padding(.leading, 70)
                 providerRow(.microsoft, title: "Outlook / Hotmail", subtitle: "Microsoft account", soon: true) {
                     message = "Outlook isn't available yet."
                 }
                 Divider().overlay(Theme.hairline).padding(.leading, 70)
-                providerRow(.imap, title: "Other (IMAP)", subtitle: "Any mail server", soon: true) {
-                    message = "Other IMAP accounts aren't available yet."
+                providerRow(.imap, title: "Other (IMAP)", subtitle: "Any mail server") {
+                    imapSheet = .imap
                 }
             }
             .card(padding: 0)
@@ -152,4 +154,8 @@ struct AccountListView: View {
             message = error.localizedDescription
         }
     }
+}
+
+extension AccountKind: Identifiable {
+    public var id: String { rawValue }
 }

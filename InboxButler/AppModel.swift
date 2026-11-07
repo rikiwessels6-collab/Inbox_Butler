@@ -99,7 +99,7 @@ final class AppModel {
         switch account.kind {
         case .gmail: return GmailProvider(account: account, tokens: tokenManager(for: account.id))
         case .microsoft: return MicrosoftProvider(account: account)
-        case .icloud, .imap: return IMAPProvider(account: account)
+        case .icloud, .imap: return IMAPProvider(account: account, secrets: secrets)
         }
     }
 
@@ -141,10 +141,45 @@ final class AppModel {
         await refresh()
     }
 
+    /// Connects an iCloud or other IMAP mailbox. Checks the sign-in works first, then saves the
+    /// password in the Keychain. For iCloud, `password` must be an APP-SPECIFIC password.
+    func addIMAPAccount(kind: AccountKind, email: String, password: String,
+                        host: String = "", port: Int = 993, username: String = "") async throws {
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanPassword = password.filter { !$0.isWhitespace }
+        let credentials: IMAPCredentials
+        if kind == .icloud {
+            credentials = .icloud(email: cleanEmail, appPassword: cleanPassword)
+        } else {
+            let cleanUser = username.trimmingCharacters(in: .whitespaces)
+            credentials = IMAPCredentials(host: host.trimmingCharacters(in: .whitespaces), port: port,
+                                          username: cleanUser.isEmpty ? cleanEmail : cleanUser, password: cleanPassword)
+        }
+
+        let existing = usingDemoData ? [] : accounts
+        if existing.contains(where: { $0.emailAddress.caseInsensitiveCompare(cleanEmail) == .orderedSame }) {
+            throw AddAccountError.duplicate(cleanEmail)
+        }
+        try await IMAPProvider.verify(credentials)      // throws a readable error if sign-in fails
+
+        let id = UUID()
+        try IMAPProvider.save(credentials, for: id, in: secrets)
+        if usingDemoData { accounts = []; messages = [] }
+        let sameKind = existing.filter { $0.kind == kind }.count
+        let baseLabel = kind == .icloud ? "iCloud" : (credentials.host.split(separator: ".").dropLast().last.map(String.init)?.capitalized ?? "Mail")
+        accounts.append(MailAccount(id: id, kind: kind, emailAddress: cleanEmail,
+                                    label: sameKind == 0 ? baseLabel : "\(baseLabel) \(sameKind + 1)",
+                                    colorIndex: existing.count))
+        try? accountStore.save(accounts)
+        configureProviders()
+        await refresh()
+    }
+
     /// Signs out (revokes Google access), deletes local tokens and cached mail.
     func removeAccount(_ account: MailAccount) async {
         guard !usingDemoData else { return }
         if account.kind == .gmail { await tokenManager(for: account.id).signOut() }
+        if account.kind == .icloud || account.kind == .imap { IMAPProvider.removeCredentials(for: account.id, from: secrets) }
         cache?.remove(accountID: account.id)
         proposalStore.removeMessages(withPrefix: account.id.uuidString + "/")
         accounts.removeAll { $0.id == account.id }
