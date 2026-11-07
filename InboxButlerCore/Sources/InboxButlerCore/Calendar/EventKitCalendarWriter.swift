@@ -57,10 +57,27 @@ public actor EventKitCalendarWriter: CalendarWriter {
             end = (proposal.end ?? proposal.start.addingTimeInterval(3_600)).addingTimeInterval(60)
         }
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
-        return store.events(matching: predicate).prefix(30).map {
-            ExistingEvent(title: $0.title ?? "", calendarTitle: $0.calendar?.title ?? "",
-                          start: $0.startDate, end: $0.endDate, isAllDay: $0.isAllDay)
-        }
+        return store.events(matching: predicate).prefix(30).map(Self.convert)
+    }
+
+    public func events(from start: Date, to end: Date) async -> [ExistingEvent] {
+        guard await accessState() == .granted else { return [] }
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        return store.events(matching: predicate).map(Self.convert).sorted { $0.start < $1.start }
+    }
+
+    private static func convert(_ e: EKEvent) -> ExistingEvent {
+        // Recurring events share one identifier, so add the start time to keep ids unique.
+        let id = (e.eventIdentifier ?? UUID().uuidString) + "@" + String(Int(e.startDate.timeIntervalSince1970))
+        return ExistingEvent(id: id, title: e.title ?? "", calendarTitle: e.calendar?.title ?? "",
+                             start: e.startDate, end: e.endDate, isAllDay: e.isAllDay, colorHex: hex(e.calendar?.cgColor))
+    }
+
+    private static func hex(_ color: CGColor?) -> UInt32? {
+        guard let rgb = color?.converted(to: CGColorSpaceCreateDeviceRGB(), intent: .defaultIntent, options: nil),
+              let c = rgb.components, c.count >= 3 else { return nil }
+        func byte(_ v: CGFloat) -> UInt32 { UInt32(max(0, min(1, v)) * 255) }
+        return byte(c[0]) << 16 | byte(c[1]) << 8 | byte(c[2])
     }
 
     public func add(_ proposal: EventProposal, toCalendar calendarID: String?) async throws {

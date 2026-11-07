@@ -65,16 +65,20 @@ public struct CalendarInfo: Identifiable, Hashable, Sendable {
 
 /// An event already in the calendar, read ONLY to show overlaps for an event being added.
 /// It is never stored or sent anywhere.
-public struct ExistingEvent: Hashable, Sendable {
+public struct ExistingEvent: Hashable, Identifiable, Sendable {
+    public let id: String
     public let title: String
     public let calendarTitle: String
     public let start: Date
     public let end: Date
     public let isAllDay: Bool
+    /// The calendar's colour as 0xRRGGBB, if known (for the week view).
+    public let colorHex: UInt32?
 
-    public init(title: String, calendarTitle: String, start: Date, end: Date, isAllDay: Bool) {
-        self.title = title; self.calendarTitle = calendarTitle
-        self.start = start; self.end = end; self.isAllDay = isAllDay
+    public init(id: String = UUID().uuidString, title: String, calendarTitle: String, start: Date, end: Date,
+                isAllDay: Bool, colorHex: UInt32? = nil) {
+        self.id = id; self.title = title; self.calendarTitle = calendarTitle
+        self.start = start; self.end = end; self.isAllDay = isAllDay; self.colorHex = colorHex
     }
 }
 
@@ -87,5 +91,7 @@ public protocol CalendarWriter: Sendable {
     func calendars() async throws -> [CalendarInfo]
     /// Events around the proposal's time, for the informational overlap display.
     func nearbyEvents(for proposal: EventProposal) async -> [ExistingEvent]
+    /// Everything on the calendar between two dates (for the Calendar tab). Read for display only.
+    func events(from start: Date, to end: Date) async -> [ExistingEvent]
     func add(_ proposal: EventProposal, toCalendar calendarID: String?) async throws
 }
