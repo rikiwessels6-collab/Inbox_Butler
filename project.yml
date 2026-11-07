@@ -52,10 +52,12 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        # Write-only: the app can add events you confirm but cannot read your calendar.
-        NSCalendarsWriteOnlyAccessUsageDescription: >-
-          Inbox Butler adds events found in your email to your calendar, only
-          after you tap Add on each one. It cannot read your existing events.
+        # Full access: lets you pick which calendar (iCloud/family/Google) an event goes to,
+        # and shows overlaps. Calendar data is never stored or sent.
+        NSCalendarsFullAccessUsageDescription: >-
+          Inbox Butler lists your calendars so you can choose where an event goes, and checks
+          events around the time of the one you're adding to point out overlaps. It adds events
+          only when you tap Add. Nothing from your calendar leaves your device.
         # App only uses OS-provided HTTPS/TLS, which is exempt. Confirm before
         # submitting to App Store Connect.
         ITSAppUsesNonExemptEncryption: false

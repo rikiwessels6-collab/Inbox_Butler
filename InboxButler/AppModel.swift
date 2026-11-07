@@ -33,6 +33,13 @@ final class AppModel {
     private(set) var waitingOnOthers: [MailMessage] = []
     /// People you might want as priority senders, based on your own habits.
     private(set) var suggestions: [SenderSuggestion] = []
+    /// Calendar access and the calendars events can be added to (iCloud, Google, family...).
+    private(set) var calendarAccess: CalendarAccess = .notDetermined
+    private(set) var calendars: [CalendarInfo] = []
+    /// The calendar new events go to; remembered between messages. nil = device default.
+    var targetCalendarID: String? = UserDefaults.standard.string(forKey: "targetCalendarID") {
+        didSet { UserDefaults.standard.set(targetCalendarID, forKey: "targetCalendarID") }
+    }
     private(set) var accounts: [MailAccount] = []
     private(set) var messages: [MailMessage] = []
     private(set) var errors: [UUID: String] = [:]
@@ -238,10 +245,35 @@ final class AppModel {
         return result
     }
 
-    /// Adds the (possibly edited) event to the calendar. Only ever called from the
+    // MARK: Calendar
+
+    func refreshCalendars() async {
+        calendarAccess = await calendarWriter.accessState()
+        calendars = calendarAccess == .granted ? ((try? await calendarWriter.calendars()) ?? []) : []
+        if let id = targetCalendarID, !calendars.contains(where: { $0.id == id }) { targetCalendarID = nil }
+    }
+
+    func requestCalendarAccess() async {
+        _ = await calendarWriter.requestAccess()
+        await refreshCalendars()
+    }
+
+    /// Overlaps and "already added?" hints. Informational only: they never block an add.
+    func overlap(for proposal: EventProposal) async -> CalendarOverlap {
+        guard calendarAccess == .granted else { return .none }
+        return CalendarOverlapChecker.classify(proposal, existing: await calendarWriter.nearbyEvents(for: proposal))
+    }
+
+    /// Adds the (possibly edited) event to the chosen calendar. Only ever called from the
     /// user tapping "Add" on that event. `original` identifies the stored proposal.
     func addToCalendar(_ edited: EventProposal, original: EventProposal) async throws -> EventProposal {
-        try await calendarWriter.add(edited)
+        try await calendarWriter.add(edited, toCalendar: targetCalendarID)
+        await refreshCalendars()   // the first add may have just been granted access
+        return markDone(edited, original: original)
+    }
+
+    /// Records an event as handled (added, or found to be in the calendar already).
+    func markDone(_ edited: EventProposal, original: EventProposal) -> EventProposal {
         var done = edited
         done.status = .confirmed
         if !usingDemoData {
@@ -249,18 +281,6 @@ final class AppModel {
             publishWidgetSnapshot()
         }
         return done
-    }
-
-    /// Downloads an attachment from the user's mail server (for preview).
-    func attachmentData(_ attachment: AttachmentInfo, in message: MailMessage) async throws -> Data {
-        guard let provider = providerByAccount[message.accountID] else { throw MailProviderError.notAuthorized }
-        return try await provider.fetchAttachment(attachment, in: message)
-    }
-
-    /// The message's original HTML (nil if it has none), for the formatted view.
-    func htmlBody(for message: MailMessage) async throws -> String? {
-        guard let provider = providerByAccount[message.accountID] else { return nil }
-        return try await provider.fetchHTMLBody(for: message)
     }
 
     func dismiss(_ proposal: EventProposal) {

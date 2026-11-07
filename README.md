@@ -101,8 +101,12 @@ Dates found become **suggested events** with the sentence they came from. You ca
 edit the title and time, then tap **Add to Calendar** or **Dismiss**. Nothing is added
 without your tap, and a dismissed or added event never comes back.
 
-- **Write-only calendar access:** iOS lets the app add events but not read or change
-  anything already in your calendar.
+- **Full calendar access (you choose to allow it):** pick which calendar each event goes to
+  (iCloud, shared family, Google). Overlaps are shown as information and **never block or skip
+  an add**; an event that already looks to be in the calendar is flagged so it isn't doubled.
+  The app only looks at events around the one you're adding, and nothing is stored or sent.
+- **Google calendars:** add your Google account in iOS Settings > Calendar > Accounts with
+  Calendars switched on. Its calendars then appear in the app and events sync to Google.
 - New unread mail from **priority senders** is scanned automatically (max 5 per refresh)
   so today's events can reach the widget. Other mail is scanned only when you open it.
 - Attachments are downloaded from your own mail server, scanned in memory and thrown away.
@@ -138,7 +142,7 @@ without your tap, and a dismissed or added event never comes back.
 | Mail content (headers, bodies, attachments) | Only to your own mail provider | Fetched over TLS from Google, Microsoft, iCloud or your IMAP server. Nothing is copied anywhere else. |
 | OAuth tokens, app passwords | **No** | iOS Keychain only. Never written to disk, logs or the App Group. |
 | Attachments (PDF, images, docs) | Only from your mail server to the device | Downloaded, read with on-device PDFKit / Vision OCR, then discarded. |
-| Calendar events you add | **No** | Written to your on-device calendar with write-only access. |
+| Calendar events you add | **No** | Written to your on-device calendar. Existing events are read only to show overlaps and are never stored or sent. |
 | Local mail cache, style profile, widget snapshot | **No** | App sandbox / App Group container on the device. |
 | Style profile (learned from sent mail) | **No** | Computed on-device and stored locally. |
 | Summaries, importance, date extraction, drafting | **Depends on the AI choice (undecided)** | Option A, Apple Foundation Models: nothing leaves the device. Option B, backend proxy: the text sent for each request leaves the device and goes to your proxy and then the model provider. Not implemented until you choose. |

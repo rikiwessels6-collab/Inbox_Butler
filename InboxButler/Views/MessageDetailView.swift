@@ -83,6 +83,14 @@ struct MessageDetailView: View {
             let visible = proposals.filter { $0.status != .dismissed }
             if !visible.isEmpty {
                 Section {
+                    if model.calendarAccess == .granted && !model.calendars.isEmpty {
+                        Picker("Add to calendar", selection: Binding(
+                            get: { model.targetCalendarID ?? "" },
+                            set: { model.targetCalendarID = $0.isEmpty ? nil : $0 })) {
+                            Text("Default calendar").tag("")
+                            ForEach(model.calendars) { Text($0.displayName).tag($0.id) }
+                        }
+                    }
                     ForEach(visible, id: \.rowID) { proposal in
                         EventProposalRow(original: proposal)
                     }
@@ -100,7 +108,7 @@ struct MessageDetailView: View {
                                             isPresented: $confirmAddAll, titleVisibility: .visible) {
                             Button("Add all \(pending.count)") { Task { await addAll() } }
                         } message: {
-                            Text("They are added exactly as shown. Overlaps with other events are fine: nothing is skipped.")
+                            Text("They are added exactly as shown, to the calendar chosen above. Overlaps are fine. Events that already look to be in your calendar are not added twice.")
                         }
                     }
                 } header: {
@@ -139,6 +147,7 @@ struct MessageDetailView: View {
             if new == nil, let old { try? FileManager.default.removeItem(at: old.deletingLastPathComponent()) }
         }
         .onAppear { model.markReadLocally(message) }
+        .task { await model.refreshCalendars() }
         .task {
             analysis = await model.analysis(for: message)
             proposals = analysis?.proposals ?? []
@@ -150,13 +159,24 @@ struct MessageDetailView: View {
     private func addAll() async {
         isAddingAll = true
         defer { isAddingAll = false }
+        var added = 0, alreadyThere = 0
         for i in proposals.indices where proposals[i].status == .proposed {
             do {
-                proposals[i] = try await model.addToCalendar(proposals[i], original: proposals[i])
+                // An exact duplicate (same title and time) is already in the calendar: don't double it.
+                if await model.overlap(for: proposals[i]).duplicate != nil {
+                    proposals[i] = model.markDone(proposals[i], original: proposals[i])
+                    alreadyThere += 1
+                } else {
+                    proposals[i] = try await model.addToCalendar(proposals[i], original: proposals[i])
+                    added += 1
+                }
             } catch {
                 alertText = error.localizedDescription
-                break
+                return
             }
+        }
+        if alreadyThere > 0 {
+            alertText = "Added \(added). \(alreadyThere) already looked to be in your calendar, so they weren't added twice."
         }
     }
 
@@ -205,6 +225,7 @@ private struct EventProposalRow: View {
     @State private var isAdding = false
     @State private var dismissed = false
     @State private var errorText: String?
+    @State private var overlap: CalendarOverlap = .none
 
     init(original: EventProposal) {
         self.original = original
@@ -227,6 +248,16 @@ private struct EventProposalRow: View {
                 }
                 if let evidence = draft.evidence {
                     Text(evidence).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                }
+                if let dup = overlap.duplicate {
+                    Label("Looks already in your calendar (\(dup.calendarTitle))", systemImage: "checkmark.circle")
+                        .font(.caption).foregroundStyle(.green)
+                }
+                if !overlap.overlaps.isEmpty {
+                    Label("Overlaps: " + overlap.overlaps.map { "\($0.title) (\($0.calendarTitle))" }.joined(separator: ", "),
+                          systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                    Text("You can still add it.").font(.caption2).foregroundStyle(.secondary)
                 }
                 if let errorText {
                     Text(errorText).font(.caption).foregroundStyle(.red)
@@ -253,6 +284,9 @@ private struct EventProposalRow: View {
                 }
             }
             .padding(.vertical, 4)
+            .task(id: draft.start) {
+                if draft.status != .confirmed { overlap = await model.overlap(for: draft) }
+            }
         }
     }
 

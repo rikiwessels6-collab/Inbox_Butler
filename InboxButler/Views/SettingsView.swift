@@ -22,6 +22,7 @@ struct SettingsView: View {
                 prioritySection
                 if !model.suggestions.isEmpty { suggestionsSection }
                 notificationsSection
+                calendarSection
                 privacySection
             }
             .navigationTitle("Priority & settings")
@@ -100,6 +101,31 @@ struct SettingsView: View {
             Text("Notifications")
         } footer: {
             Text("A notification shows the sender and subject. It is created on this device from mail already downloaded; nothing is sent to any server. New mail is checked when iOS allows background refresh (usually every 15 minutes or more), so alerts are not instant. Follow-up reminders need the original reply to still be in your Inbox to be accurate.")
+        }
+    }
+
+    private var calendarSection: some View {
+        Section {
+            LabeledContent("Calendar access", value: calendarStatusText)
+            if model.calendarAccess != .granted {
+                Button("Allow calendar access") { Task { await model.requestCalendarAccess() } }
+            }
+            ForEach(model.calendars) { calendar in
+                Label(calendar.displayName, systemImage: calendar.id == model.targetCalendarID ? "checkmark.circle.fill" : "calendar")
+            }
+        } header: {
+            Text("Calendars")
+        } footer: {
+            Text("Full access lets you choose which calendar (iCloud, family, Google) each event goes to, and shows overlaps. The app only looks at events around the time of the one you're adding; nothing from your calendar is stored or sent anywhere. To use Google calendars, add your Google account in iOS Settings > Calendar > Accounts and switch Calendars on. Events then sync to Google automatically.")
+        }
+        .task { await model.refreshCalendars() }
+    }
+
+    private var calendarStatusText: String {
+        switch model.calendarAccess {
+        case .granted: return "On"
+        case .denied: return "Off (enable in Settings)"
+        case .notDetermined: return "Not asked yet"
         }
     }
 
