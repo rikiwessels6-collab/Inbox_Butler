@@ -130,7 +130,9 @@ struct MessageDetailView: View {
                 if let account = model.account(for: message.accountID) { AccountBadge(account: account) }
                 if model.isPriority(message) { PillLabel(text: "Priority", systemImage: "star.fill", tint: Theme.gold) }
                 if message.awaitingReply { PillLabel(text: "Needs reply", systemImage: "arrowshape.turn.up.left", tint: Theme.warn) }
-                if message.isBulk { PillLabel(text: "Newsletter", systemImage: "newspaper") }
+                ForEach(MessageLabeler.labels(for: message, body: analysis?.body, max: 3)) { label in
+                    PillLabel(text: label.title, systemImage: label.symbolName, tint: label.tint)
+                }
             }
         }
     }

@@ -84,6 +84,14 @@ struct UnifiedInboxView: View {
                 .listRowBackground(Color.clear)
                 .selectionDisabled()
 
+            if showCaughtUp {
+                CaughtUpCard()
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 16, trailing: 16))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .selectionDisabled()
+            }
+
             ForEach(items) { message in
                 MessageRow(message: message,
                            account: model.account(for: message.accountID),
@@ -132,7 +140,7 @@ struct UnifiedInboxView: View {
         .overlay {
             if model.isRefreshing && model.messages.isEmpty {
                 ProgressView()
-            } else if items.isEmpty && !model.isRefreshing {
+            } else if items.isEmpty && !model.isRefreshing && !showCaughtUp {
                 ContentUnavailableView(search.isEmpty ? "All clear" : "No results",
                                        systemImage: search.isEmpty ? "tray" : "magnifyingglass",
                                        description: Text(search.isEmpty ? "Nothing here right now." : "Try a different search."))
@@ -210,6 +218,15 @@ struct UnifiedInboxView: View {
     }
 
     // MARK: Data
+
+    /// The landscape reward for an empty main inbox (not for searches or special lists).
+    private var showCaughtUp: Bool {
+        guard items.isEmpty, search.isEmpty, !model.isRefreshing else { return false }
+        switch filter ?? .all {
+        case .all, .priority, .other: return true
+        default: return false
+        }
+    }
 
     private var greeting: String {
         switch Calendar.current.component(.hour, from: Date()) {
@@ -370,7 +387,8 @@ private struct MessageRow: View {
 
     @ViewBuilder
     private var tags: some View {
-        let hasTags = account != nil || !message.attachments.isEmpty || message.awaitingReply || message.isBulk || reminderBack
+        let labels = MessageLabeler.labels(for: message, max: 2)
+        let hasTags = account != nil || !message.attachments.isEmpty || message.awaitingReply || reminderBack || !labels.isEmpty
         if hasTags {
             HStack(spacing: 8) {
                 if let account {
@@ -385,7 +403,9 @@ private struct MessageRow: View {
                 }
                 if reminderBack { PillLabel(text: "Reminder", systemImage: "bell.fill", tint: Theme.accent) }
                 if message.awaitingReply { PillLabel(text: "Reply", systemImage: "arrowshape.turn.up.left", tint: Theme.warn) }
-                if message.isBulk { PillLabel(text: "Newsletter", systemImage: "newspaper") }
+                ForEach(labels) { label in
+                    PillLabel(text: label.title, systemImage: label.symbolName, tint: label.tint)
+                }
             }
             .padding(.top, 2)
         }
