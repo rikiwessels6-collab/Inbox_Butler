@@ -12,11 +12,13 @@ public struct StyleProfile: Codable, Hashable, Sendable {
     public var sampleCount: Int             // sent messages analysed
     /// A few of the user's own short replies, used as examples when drafting (on-device only).
     public var exampleReplies: [String]
+    /// Optional one-liner about the user (from `WriterProfile`), added when drafting.
+    public var aboutUser: String
     public var updatedAt: Date
 
     public init(greetings: [String] = [], signOffs: [String] = [], averageSentenceWords: Double = 0,
                 formality: Double = 0.5, usesEmoji: Bool = false, commonPhrases: [String] = [],
-                sampleCount: Int = 0, exampleReplies: [String] = [], updatedAt: Date = Date()) {
+                sampleCount: Int = 0, exampleReplies: [String] = [], aboutUser: String = "", updatedAt: Date = Date()) {
         self.greetings = greetings
         self.signOffs = signOffs
         self.averageSentenceWords = averageSentenceWords
@@ -25,6 +27,7 @@ public struct StyleProfile: Codable, Hashable, Sendable {
         self.commonPhrases = commonPhrases
         self.sampleCount = sampleCount
         self.exampleReplies = exampleReplies
+        self.aboutUser = aboutUser
         self.updatedAt = updatedAt
     }
 }
