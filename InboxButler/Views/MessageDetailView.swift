@@ -2,7 +2,7 @@ import SwiftUI
 import QuickLook
 import InboxButlerCore
 
-/// A message with its full text, attachments, and events found in them.
+/// A message laid out for reading, with its attachments and the events found in them.
 /// Everything is read and analysed on this device.
 struct MessageDetailView: View {
     @Environment(AppModel.self) private var model
@@ -22,121 +22,38 @@ struct MessageDetailView: View {
     private struct HTMLItem: Identifiable { let id = UUID(); let html: String }
 
     var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(message.subject).font(.title3.weight(.semibold))
-                    Text("From \(message.from.display)").font(.subheadline)
-                    if let account = model.account(for: message.accountID) {
-                        AccountBadge(account: account)
-                    }
-                }
-                if model.isPriority(message) {
-                    Label("Priority sender", systemImage: "star.fill").foregroundStyle(.yellow)
-                } else {
-                    Button {
-                        model.addPrioritySender(message.from.address)
-                    } label: {
-                        Label("Notify me about \(message.from.display)", systemImage: "star")
-                    }
-                }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                header
+                messageBody
+                if !message.attachments.isEmpty { attachmentsSection }
+                eventsSection
+                notesSection
             }
-
-            Section("Message") {
-                if let analysis {
-                    Text(String(analysis.body.prefix(4000)))
-                        .textSelection(.enabled)
-                } else {
-                    Text(message.snippet).foregroundStyle(.secondary)
-                    if isLoading { ProgressView() }
-                }
-                Button {
-                    Task { await showFormatted() }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 48)
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .background(Theme.background.ignoresSafeArea())
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button { Task { await showFormatted() } } label: {
+                        Label("View formatted", systemImage: "doc.richtext")
+                    }
+                    if !model.isPriority(message) {
+                        Button { model.addPrioritySender(message.from.address) } label: {
+                            Label("Notify me about \(message.from.display)", systemImage: "star")
+                        }
+                    }
                 } label: {
-                    if isLoadingHTML { ProgressView() } else { Label("View formatted", systemImage: "doc.richtext") }
+                    if isLoadingHTML { ProgressView() } else { Image(systemName: "ellipsis.circle") }
                 }
-                .disabled(isLoadingHTML)
-            }
-
-            if !message.attachments.isEmpty {
-                Section("Attachments") {
-                    ForEach(message.attachments) { attachment in
-                        Button {
-                            Task { await preview(attachment) }
-                        } label: {
-                            HStack {
-                                Label(attachment.filename, systemImage: attachment.kind.symbolName)
-                                Spacer()
-                                if openingAttachment == attachment.id {
-                                    ProgressView()
-                                } else {
-                                    Text(attachment.kind == .other ? "Preview only" : byteString(attachment.byteCount))
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .foregroundStyle(.primary)
-                    }
-                }
-            }
-
-            let visible = proposals.filter { $0.status != .dismissed }
-            if !visible.isEmpty {
-                Section {
-                    if model.calendarAccess == .granted && !model.calendars.isEmpty {
-                        Picker("Add to calendar", selection: Binding(
-                            get: { model.targetCalendarID ?? "" },
-                            set: { model.targetCalendarID = $0.isEmpty ? nil : $0 })) {
-                            Text("Default calendar").tag("")
-                            ForEach(model.calendars) { Text($0.displayName).tag($0.id) }
-                        }
-                    }
-                    ForEach(visible, id: \.rowID) { proposal in
-                        EventProposalRow(original: proposal)
-                    }
-                    let pending = visible.filter { $0.status == .proposed }
-                    if pending.count > 1 {
-                        Button {
-                            confirmAddAll = true
-                        } label: {
-                            if isAddingAll { ProgressView() } else {
-                                Label("Add all \(pending.count) to Calendar", systemImage: "calendar.badge.plus")
-                            }
-                        }
-                        .disabled(isAddingAll)
-                        .confirmationDialog("Add \(pending.count) events to your calendar?",
-                                            isPresented: $confirmAddAll, titleVisibility: .visible) {
-                            Button("Add all \(pending.count)") { Task { await addAll() } }
-                        } message: {
-                            Text("They are added exactly as shown, to the calendar chosen above. Overlaps are fine. Events that already look to be in your calendar are not added twice.")
-                        }
-                    }
-                } header: {
-                    Text("Suggested events")
-                } footer: {
-                    Text("Found on this device in the message and its attachments. Nothing is added until you tap Add. Events that overlap others are still added: the app never blocks or skips one because of a clash.")
-                }
-            } else if !isLoading {
-                Section {
-                    Label("No events found", systemImage: "calendar")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if let notes = analysis?.notes, !notes.isEmpty {
-                Section("Couldn't scan") {
-                    ForEach(notes, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
-                }
-            }
-
-            Section {
-                Label("A draft reply in your style will appear here. It is never sent automatically.",
-                      systemImage: "square.and.pencil")
-            } header: {
-                Text("Coming soon")
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
         .quickLookPreview($previewURL)
         .sheet(item: $htmlItem) { item in HTMLMessageSheet(subject: message.subject, html: item.html) }
         .alert("Message", isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
@@ -154,6 +71,166 @@ struct MessageDetailView: View {
             isLoading = false
         }
     }
+
+    // MARK: Header and body
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(message.subject)
+                .font(.serif(.title))
+                .foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 12) {
+                Avatar(name: message.from.display, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(message.from.display).font(.headline).foregroundStyle(Theme.ink)
+                    Text(message.from.address).font(.footnote).foregroundStyle(Theme.muted)
+                }
+                Spacer(minLength: 8)
+                Text(message.receivedAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.footnote).foregroundStyle(Theme.muted)
+            }
+
+            HStack(spacing: 8) {
+                if let account = model.account(for: message.accountID) { AccountBadge(account: account) }
+                if model.isPriority(message) { PillLabel(text: "Priority", systemImage: "star.fill", tint: Theme.gold) }
+                if message.awaitingReply { PillLabel(text: "Needs reply", systemImage: "arrowshape.turn.up.left", tint: Theme.warn) }
+                if message.isBulk { PillLabel(text: "Newsletter", systemImage: "newspaper") }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var messageBody: some View {
+        Divider().overlay(Theme.hairline)
+        if let analysis {
+            Text(String(analysis.body.prefix(4000)))
+                .font(.body)
+                .lineSpacing(5)
+                .foregroundStyle(Theme.ink)
+                .textSelection(.enabled)
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(message.snippet).font(.body).foregroundStyle(Theme.muted)
+                if isLoading { ProgressView() }
+            }
+        }
+    }
+
+    // MARK: Attachments
+
+    private var attachmentsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "Attachments")
+            VStack(spacing: 0) {
+                ForEach(Array(message.attachments.enumerated()), id: \.element.id) { index, attachment in
+                    Button { Task { await preview(attachment) } } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: attachment.kind.symbolName)
+                                .font(.title3)
+                                .foregroundStyle(Theme.accent)
+                                .frame(width: 40, height: 40)
+                                .background(Theme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(attachment.filename).font(.subheadline.weight(.medium)).foregroundStyle(Theme.ink).lineLimit(1)
+                                Text(attachment.kind == .other ? "Preview only" : byteString(attachment.byteCount))
+                                    .font(.caption).foregroundStyle(Theme.muted)
+                            }
+                            Spacer()
+                            if openingAttachment == attachment.id {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.muted)
+                            }
+                        }
+                        .padding(14)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if index < message.attachments.count - 1 { Divider().overlay(Theme.hairline).padding(.leading, 66) }
+                }
+            }
+            .card(padding: 0)
+        }
+    }
+
+    // MARK: Events
+
+    @ViewBuilder
+    private var eventsSection: some View {
+        let visible = proposals.filter { $0.status != .dismissed }
+        if !visible.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionLabel(text: "Suggested events")
+                if model.calendarAccess == .granted && !model.calendars.isEmpty { calendarPicker }
+                ForEach(visible, id: \.rowID) { proposal in
+                    EventProposalRow(original: proposal)
+                }
+                let pending = visible.filter { $0.status == .proposed }
+                if pending.count > 1 {
+                    Button { confirmAddAll = true } label: {
+                        if isAddingAll { ProgressView() } else {
+                            Label("Add all \(pending.count) to Calendar", systemImage: "calendar.badge.plus")
+                        }
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(isAddingAll)
+                    .confirmationDialog("Add \(pending.count) events to your calendar?",
+                                        isPresented: $confirmAddAll, titleVisibility: .visible) {
+                        Button("Add all \(pending.count)") { Task { await addAll() } }
+                    } message: {
+                        Text("They are added exactly as shown, to the calendar chosen above. Overlaps are fine. Events that already look to be in your calendar are not added twice.")
+                    }
+                }
+                Text("Found on this device in the message and its attachments. Nothing is added until you tap Add. Events that overlap others are still added: the app never blocks or skips one because of a clash.")
+                    .font(.footnote).foregroundStyle(Theme.muted)
+            }
+        } else if !isLoading {
+            HStack(spacing: 10) {
+                Image(systemName: "calendar").foregroundStyle(Theme.muted)
+                Text("No events found in this message").font(.subheadline).foregroundStyle(Theme.muted)
+            }
+        }
+    }
+
+    private var calendarPicker: some View {
+        Menu {
+            Button { model.targetCalendarID = nil } label: {
+                if model.targetCalendarID == nil { Label("Default calendar", systemImage: "checkmark") } else { Text("Default calendar") }
+            }
+            ForEach(model.calendars) { calendar in
+                Button { model.targetCalendarID = calendar.id } label: {
+                    if model.targetCalendarID == calendar.id { Label(calendar.displayName, systemImage: "checkmark") }
+                    else { Text(calendar.displayName) }
+                }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "calendar").foregroundStyle(Theme.accent)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Add to").font(.caption).foregroundStyle(Theme.muted)
+                    Text(model.calendars.first { $0.id == model.targetCalendarID }?.displayName ?? "Default calendar")
+                        .font(.subheadline.weight(.medium)).foregroundStyle(Theme.ink)
+                }
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(Theme.muted)
+            }
+            .card(padding: 14)
+        }
+    }
+
+    @ViewBuilder
+    private var notesSection: some View {
+        if let notes = analysis?.notes, !notes.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel(text: "Couldn't scan")
+                ForEach(notes, id: \.self) { Text($0).font(.footnote).foregroundStyle(Theme.muted) }
+            }
+        }
+    }
+
+    // MARK: Actions
 
     /// Adds every pending suggestion, exactly as shown. A clash never skips an event.
     private func addAll() async {
@@ -217,7 +294,9 @@ struct MessageDetailView: View {
     }
 }
 
-/// One suggested event. You can fix the title and time, then Add or Dismiss.
+// MARK: - One suggested event
+
+/// A suggested event. You can fix the title and time, then Add or Dismiss.
 private struct EventProposalRow: View {
     @Environment(AppModel.self) private var model
     let original: EventProposal
@@ -232,60 +311,90 @@ private struct EventProposalRow: View {
         _draft = State(initialValue: original)
     }
 
+    private var added: Bool { draft.status == .confirmed }
+
+    private var timeText: String {
+        if draft.isAllDay { return "All day" }
+        let start = draft.start.formatted(date: .omitted, time: .shortened)
+        guard let end = draft.end else { return start }
+        return start + " – " + end.formatted(date: .omitted, time: .shortened)
+    }
+
     var body: some View {
         if dismissed { EmptyView() } else {
-            VStack(alignment: .leading, spacing: 8) {
-                TextField("Title", text: $draft.title, axis: .vertical)
-                    .font(.headline)
-                    .disabled(draft.status == .confirmed)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(spacing: 0) {
+                        Text(draft.start.formatted(.dateTime.month(.abbreviated)).uppercased())
+                            .font(.caption2.weight(.bold)).foregroundStyle(Theme.accent)
+                        Text(draft.start.formatted(.dateTime.day()))
+                            .font(.title3.weight(.bold)).foregroundStyle(Theme.ink)
+                    }
+                    .frame(width: 54, height: 54)
+                    .background(Theme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        TextField("Title", text: $draft.title, axis: .vertical)
+                            .font(.headline)
+                            .foregroundStyle(Theme.ink)
+                            .disabled(added)
+                        Text(timeText).font(.subheadline).foregroundStyle(Theme.muted)
+                    }
+                }
 
                 DatePicker("When", selection: startBinding,
                            displayedComponents: draft.isAllDay ? [.date] : [.date, .hourAndMinute])
-                    .disabled(draft.status == .confirmed)
+                    .font(.subheadline)
+                    .disabled(added)
 
                 if let location = draft.location, !location.isEmpty {
-                    Label(location, systemImage: "mappin.and.ellipse").font(.caption)
+                    Label(location, systemImage: "mappin.and.ellipse").font(.footnote).foregroundStyle(Theme.muted)
                 }
                 if let evidence = draft.evidence {
-                    Text(evidence).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                    HStack(alignment: .top, spacing: 10) {
+                        RoundedRectangle(cornerRadius: 2).fill(Theme.hairline).frame(width: 3)
+                        Text(evidence).font(.footnote).foregroundStyle(Theme.muted).lineLimit(3)
+                    }
                 }
+
                 if let dup = overlap.duplicate {
-                    Label("Looks already in your calendar (\(dup.calendarTitle))", systemImage: "checkmark.circle")
-                        .font(.caption).foregroundStyle(.green)
+                    PillLabel(text: "Looks already in your calendar (\(dup.calendarTitle))",
+                              systemImage: "checkmark.circle", tint: Theme.good)
                 }
                 if !overlap.overlaps.isEmpty {
-                    Label("Overlaps: " + overlap.overlaps.map { "\($0.title) (\($0.calendarTitle))" }.joined(separator: ", "),
-                          systemImage: "exclamationmark.triangle")
-                        .font(.caption).foregroundStyle(.orange)
-                    Text("You can still add it.").font(.caption2).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        PillLabel(text: "Overlaps: " + overlap.overlaps.map { "\($0.title) (\($0.calendarTitle))" }.joined(separator: ", "),
+                                  systemImage: "exclamationmark.triangle", tint: Theme.warn)
+                        Text("You can still add it.").font(.caption2).foregroundStyle(Theme.muted)
+                    }
                 }
-                if let errorText {
-                    Text(errorText).font(.caption).foregroundStyle(.red)
-                }
+                if let errorText { Text(errorText).font(.footnote).foregroundStyle(.red) }
 
-                if draft.status == .confirmed {
-                    Label("Added to your calendar", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                if added {
+                    Label("Added to your calendar", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.good)
                 } else {
-                    HStack {
-                        Button {
-                            Task { await add() }
-                        } label: {
-                            if isAdding { ProgressView() } else { Label("Add to Calendar", systemImage: "calendar.badge.plus") }
+                    HStack(spacing: 10) {
+                        Button { Task { await add() } } label: {
+                            if isAdding { ProgressView().tint(.white) } else {
+                                Label("Add to Calendar", systemImage: "calendar.badge.plus")
+                            }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(isAdding || draft.title.trimmingCharacters(in: .whitespaces).isEmpty)
 
-                        Button("Dismiss", role: .cancel) {
+                        Button("Dismiss") {
                             model.dismiss(original)
-                            dismissed = true
+                            withAnimation(.snappy) { dismissed = true }
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(SecondaryButtonStyle())
                     }
                 }
             }
-            .padding(.vertical, 4)
+            .card()
+            .sensoryFeedback(.success, trigger: added)
             .task(id: draft.start) {
-                if draft.status != .confirmed { overlap = await model.overlap(for: draft) }
+                if !added { overlap = await model.overlap(for: draft) }
             }
         }
     }
