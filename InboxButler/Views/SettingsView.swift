@@ -21,6 +21,7 @@ struct SettingsView: View {
             List {
                 prioritySection
                 if !model.suggestions.isEmpty { suggestionsSection }
+                draftingSection
                 notificationsSection
                 calendarSection
                 privacySection
@@ -103,6 +104,25 @@ struct SettingsView: View {
             Text("Notifications")
         } footer: {
             Text("A notification shows the sender and subject. It is created on this device from mail already downloaded; nothing is sent to any server. New mail is checked when iOS allows background refresh (usually every 15 minutes or more), so alerts are not instant. Follow-up reminders need the original reply to still be in your Inbox to be accurate.")
+        }
+    }
+
+    private var draftingSection: some View {
+        Section {
+            Text(model.aiStatusText).font(.footnote)
+            if let style = model.styleProfile {
+                LabeledContent("Learned from", value: "\(style.sampleCount) sent emails")
+                if let g = style.greetings.first { LabeledContent("Greeting", value: g) }
+                if let s = style.signOffs.first { LabeledContent("Sign-off", value: s) }
+            } else {
+                Text("Your writing style is learned from your sent mail after the first sync.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Button("Learn my style again") { Task { await model.learnStyleIfNeeded(force: true) } }
+        } header: {
+            Text("Reply drafts")
+        } footer: {
+            Text("Drafts and your writing style are created and stored on this device only. Nothing is sent anywhere to write them, and a reply is only sent when you tap Send in the mail sheet.")
         }
     }
 

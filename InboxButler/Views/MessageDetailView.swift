@@ -18,6 +18,9 @@ struct MessageDetailView: View {
     @State private var alertText: String?
     @State private var confirmAddAll = false
     @State private var isAddingAll = false
+    @State private var replyText = ""
+    @State private var showComposer = false
+    @State private var showNoMailAlert = false
 
     private struct HTMLItem: Identifiable { let id = UUID(); let html: String }
 
@@ -26,6 +29,7 @@ struct MessageDetailView: View {
             VStack(alignment: .leading, spacing: 28) {
                 header
                 messageBody
+                if !model.isFromMe(message) { replySection }
                 if !message.attachments.isEmpty { attachmentsSection }
                 eventsSection
                 notesSection
@@ -55,6 +59,24 @@ struct MessageDetailView: View {
             }
         }
         .quickLookPreview($previewURL)
+        .sheet(isPresented: $showComposer) {
+            MailComposer(to: [message.from.address],
+                         subject: ReplyFormatter.subject(message.subject),
+                         body: replyText + "\n\n" + ReplyFormatter.quoted(original: analysis?.body ?? message.snippet,
+                                                                          sender: message.from.display, date: message.receivedAt),
+                         preferredFrom: model.account(for: message.accountID)?.emailAddress) { result in
+                showComposer = false
+                if result == .sent { model.discardDraft(for: message); replyText = "" }
+            }
+            .ignoresSafeArea()
+        }
+        .alert("Mail isn't set up on this device", isPresented: $showNoMailAlert) {
+            Button("Copy reply") { UIPasteboard.general.string = replyText }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Add this email account in the iOS Mail app (Settings > Apps > Mail > Mail Accounts) to send from here. You can copy your reply and paste it into your mail app now.")
+        }
+        .task(id: model.draft(for: message)?.id) { replyText = model.draft(for: message)?.body ?? "" }
         .sheet(item: $htmlItem) { item in HTMLMessageSheet(subject: message.subject, html: item.html) }
         .alert("Message", isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
             Button("OK", role: .cancel) {}
@@ -116,6 +138,77 @@ struct MessageDetailView: View {
                 if isLoading { ProgressView() }
             }
         }
+    }
+
+    // MARK: Reply
+
+    private var replySection: some View {
+        let drafting = model.isDraftingIDs.contains(message.id)
+        let draft = model.draft(for: message)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                SectionLabel(text: "Reply")
+                Spacer()
+                if let draft {
+                    PillLabel(text: draft.source == "on-device" ? "Written on this device" : "Basic draft",
+                              systemImage: draft.source == "on-device" ? "sparkles" : "text.alignleft",
+                              tint: draft.source == "on-device" ? Theme.accent : Theme.muted)
+                }
+            }
+            if drafting {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Writing a draft in your style…").font(.subheadline).foregroundStyle(Theme.muted)
+                }
+            } else if draft != nil {
+                TextEditor(text: $replyText)
+                    .font(.body)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 150)
+                    .padding(10)
+                    .background(Theme.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .onChange(of: replyText) { _, new in model.saveDraftText(new, for: message) }
+                HStack(spacing: 10) {
+                    Button {
+                        if MailComposer.canSend { showComposer = true } else { showNoMailAlert = true }
+                    } label: {
+                        Label("Review & send", systemImage: "paperplane")
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    Button("Regenerate") {
+                        Task { await startDraft(replacing: true) }
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+
+                    Spacer()
+                    Button("Discard", role: .destructive) {
+                        model.discardDraft(for: message)
+                        replyText = ""
+                    }
+                    .font(.subheadline)
+                }
+                Text("Edit the draft above. \"Review & send\" opens the mail sheet with it filled in: nothing is sent until you tap Send there.")
+                    .font(.footnote).foregroundStyle(Theme.muted)
+            } else {
+                Button {
+                    Task { await startDraft(replacing: false) }
+                } label: {
+                    Label("Draft a reply", systemImage: "sparkles")
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                Text("Written on this device in your style. Never sent automatically.")
+                    .font(.footnote).foregroundStyle(Theme.muted)
+            }
+        }
+        .card()
+    }
+
+    private func startDraft(replacing: Bool) async {
+        if replacing { model.discardDraft(for: message) }
+        await model.generateDraft(for: message, body: analysis?.body)
+        replyText = model.draft(for: message)?.body ?? ""
     }
 
     // MARK: Attachments

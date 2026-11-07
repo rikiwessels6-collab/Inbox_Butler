@@ -33,6 +33,11 @@ final class AppModel {
     private(set) var waitingOnOthers: [MailMessage] = []
     /// People you might want as priority senders, based on your own habits.
     private(set) var suggestions: [SenderSuggestion] = []
+    /// Reply drafts by message id. Written on this device; never sent automatically.
+    private(set) var drafts: [String: ReplyDraft] = [:]
+    private(set) var isDraftingIDs: Set<String> = []
+    /// What the app has learned about how you write (on this device).
+    private(set) var styleProfile: StyleProfile?
     /// Calendar access and the calendars events can be added to (iCloud, Google, family...).
     private(set) var calendarAccess: CalendarAccess = .notDetermined
     private(set) var calendars: [CalendarInfo] = []
@@ -58,6 +63,9 @@ final class AppModel {
     private let proposalStore = EventProposalStore()
     private let calendarWriter = EventKitCalendarWriter()
     private let analyzer = MessageAnalyzer()
+    private let draftStore = DraftStore()
+    private let styleStore = StyleProfileStore()
+    private var ai: any AIService = DraftAI.make()
     private var providerByAccount: [UUID: any MailProvider] = [:]
 
     private init() {
@@ -65,6 +73,9 @@ final class AppModel {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         cache = try? MessageCache()
         accounts = accountStore.load()
+        styleProfile = styleStore.load()
+        drafts = Dictionary(draftStore.all().filter { $0.status != .discarded }.map { ($0.inReplyToMessageID, $0) },
+                            uniquingKeysWith: { _, new in new })
         configureProviders()
         // Offline-first: show what we already have before the network answers.
         if !usingDemoData, let cache { messages = cache.load() }
@@ -182,6 +193,8 @@ final class AppModel {
         if account.kind == .icloud || account.kind == .imap { IMAPProvider.removeCredentials(for: account.id, from: secrets) }
         cache?.remove(accountID: account.id)
         proposalStore.removeMessages(withPrefix: account.id.uuidString + "/")
+        draftStore.removeMessages(withPrefix: account.id.uuidString + "/")
+        drafts = drafts.filter { !$0.key.hasPrefix(account.id.uuidString + "/") }
         accounts.removeAll { $0.id == account.id }
         errors[account.id] = nil
         try? accountStore.save(accounts)
@@ -218,6 +231,8 @@ final class AppModel {
         await notifyFollowUps()
         await scanPriorityMailForEvents()
         await rescheduleBrief()
+        // Drafting and style learning can be slow: run them after the refresh finishes.
+        Task { await learnStyleIfNeeded(); await prepareDrafts() }
     }
 
     // MARK: Reply tracking and suggestions
@@ -347,6 +362,80 @@ final class AppModel {
             .filter { !$0.isRead && isPriority($0) && !proposalStore.hasScanned($0.id) }
             .prefix(5)
         for message in candidates { _ = await analysis(for: message) }
+    }
+
+    // MARK: Reply drafts
+
+    func isFromMe(_ message: MailMessage) -> Bool {
+        accounts.contains { $0.emailAddress.caseInsensitiveCompare(message.from.address) == .orderedSame }
+    }
+
+    func draft(for message: MailMessage) -> ReplyDraft? { drafts[message.id] }
+
+    var draftedMessageIDs: Set<String> { Set(drafts.keys) }
+
+    var aiStatusText: String { DraftAI.statusText }
+
+    /// Writes a draft reply on this device. If the AI model fails, falls back to a simple template.
+    @discardableResult
+    func generateDraft(for message: MailMessage, body: String? = nil) async -> ReplyDraft? {
+        guard !isDraftingIDs.contains(message.id) else { return drafts[message.id] }
+        isDraftingIDs.insert(message.id)
+        defer { isDraftingIDs.remove(message.id) }
+
+        var text = body
+        if text == nil, let provider = providerByAccount[message.accountID] {
+            text = try? await provider.fetchBody(for: message)
+        }
+        let source = text ?? message.snippet
+        let style = styleStore.load()
+        let draft: ReplyDraft
+        do {
+            draft = try await ai.draftReply(to: message, body: source, style: style)
+        } catch {
+            guard let fallback = try? await TemplateDraftService().draftReply(to: message, body: source, style: style) else { return nil }
+            draft = fallback
+        }
+        drafts[message.id] = draft
+        if !usingDemoData { draftStore.save(draft) }
+        return draft
+    }
+
+    /// Saves the user's edits to a draft.
+    func saveDraftText(_ text: String, for message: MailMessage) {
+        guard var draft = drafts[message.id], draft.body != text else { return }
+        draft.body = text
+        draft.status = .edited
+        drafts[message.id] = draft
+        if !usingDemoData { draftStore.save(draft) }
+    }
+
+    func discardDraft(for message: MailMessage) {
+        drafts[message.id] = nil
+        if !usingDemoData { draftStore.remove(forMessage: message.id) }
+    }
+
+    /// Learns the user's writing style from recent sent mail (on this device), at most weekly.
+    func learnStyleIfNeeded(force: Bool = false) async {
+        guard !usingDemoData, !sent.isEmpty else { return }
+        if !force, let profile = styleStore.load(), Date().timeIntervalSince(profile.updatedAt) < 7 * 86_400 { return }
+        var bodies: [String] = []
+        for message in sent.prefix(15) {
+            if let provider = providerByAccount[message.accountID], let body = try? await provider.fetchBody(for: message) {
+                bodies.append(body)
+            }
+        }
+        guard bodies.count >= 3 else { return }
+        let profile = StyleLearner.learn(from: bodies)
+        try? styleStore.save(profile)
+        styleProfile = profile
+    }
+
+    /// Gets drafts ready for priority mail that is waiting on you (max 3 per refresh).
+    func prepareDrafts() async {
+        guard !usingDemoData else { return }
+        let candidates = messages.filter { $0.awaitingReply && isPriority($0) && drafts[$0.id] == nil && !isFromMe($0) }.prefix(3)
+        for message in candidates { await generateDraft(for: message) }
     }
 
     // MARK: Priority senders

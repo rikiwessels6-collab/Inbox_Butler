@@ -2,7 +2,7 @@ import SwiftUI
 import InboxButlerCore
 
 enum InboxFilter: Hashable {
-    case all, priority, needsReply, newsletters, waiting
+    case all, priority, needsReply, newsletters, waiting, drafts
     case account(UUID)
 }
 
@@ -37,6 +37,7 @@ struct UnifiedInboxView: View {
                 row("All mail", "tray.full", .all, unreadCount(.all))
                 row("Priority", "star.fill", .priority, unreadCount(.priority))
                 row("Needs a reply", "arrowshape.turn.up.left", .needsReply, model.messages.filter(\.awaitingReply).count)
+                row("Drafts ready", "square.and.pencil", .drafts, model.drafts.count)
                 row("Waiting on others", "clock", .waiting, model.waitingOnOthers.count)
                 row("Newsletters", "newspaper", .newsletters, unreadCount(.newsletters))
             }
@@ -159,6 +160,7 @@ struct UnifiedInboxView: View {
                 chip("All", .all)
                 chip("Priority", .priority)
                 chip("Needs reply", .needsReply)
+                chip("Drafts", .drafts)
                 chip("Waiting", .waiting)
                 chip("Newsletters", .newsletters)
             }
@@ -215,6 +217,7 @@ struct UnifiedInboxView: View {
         case .newsletters: return model.messages.filter { !$0.isRead && $0.isBulk }.count
         case .needsReply: return model.messages.filter(\.awaitingReply).count
         case .waiting: return model.waitingOnOthers.count
+        case .drafts: return model.drafts.count
         case .account(let id): return model.messages.filter { !$0.isRead && $0.accountID == id }.count
         }
     }
@@ -226,6 +229,7 @@ struct UnifiedInboxView: View {
         case .needsReply: return "Needs a reply"
         case .newsletters: return "Newsletters"
         case .waiting: return "Waiting on others"
+        case .drafts: return "Drafts ready"
         case .account(let id): return model.account(for: id)?.label ?? "Account"
         }
     }
@@ -238,6 +242,7 @@ struct UnifiedInboxView: View {
         case .needsReply: base = model.messages.filter(\.awaitingReply)
         case .newsletters: base = model.messages.filter(\.isBulk)
         case .waiting: base = model.waitingOnOthers
+        case .drafts: base = model.messages.filter { model.drafts[$0.id] != nil }
         case .account(let id): base = model.messages.filter { $0.accountID == id }
         }
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
