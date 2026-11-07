@@ -4,10 +4,7 @@ import InboxButlerCore
 /// Visual identity for accounts: colour and icon. Lives in the app target
 /// because Core has no UI dependency.
 extension MailAccount {
-    var badgeColor: Color {
-        let palette: [Color] = [.red, .blue, .green, .orange, .purple, .teal]
-        return palette[colorIndex % palette.count]
-    }
+    var badgeColor: Color { Theme.palette[colorIndex % Theme.palette.count] }
 }
 
 extension AccountKind {

@@ -9,6 +9,8 @@ struct InboxButlerApp: App {
         WindowGroup {
             RootView()
                 .environment(AppModel.shared)
+                .environment(AppRouter.shared)
+                .tint(Theme.accent)
                 .task { await AppModel.shared.refresh() }
         }
         .onChange(of: scenePhase) { _, phase in
