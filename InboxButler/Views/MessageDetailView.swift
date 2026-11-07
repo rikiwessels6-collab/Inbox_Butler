@@ -16,6 +16,8 @@ struct MessageDetailView: View {
     @State private var previewURL: URL?
     @State private var openingAttachment: String?
     @State private var alertText: String?
+    @State private var confirmAddAll = false
+    @State private var isAddingAll = false
 
     private struct HTMLItem: Identifiable { let id = UUID(); let html: String }
 
@@ -81,13 +83,30 @@ struct MessageDetailView: View {
             let visible = proposals.filter { $0.status != .dismissed }
             if !visible.isEmpty {
                 Section {
-                    ForEach(visible, id: \.fingerprint) { proposal in
+                    ForEach(visible, id: \.rowID) { proposal in
                         EventProposalRow(original: proposal)
+                    }
+                    let pending = visible.filter { $0.status == .proposed }
+                    if pending.count > 1 {
+                        Button {
+                            confirmAddAll = true
+                        } label: {
+                            if isAddingAll { ProgressView() } else {
+                                Label("Add all \(pending.count) to Calendar", systemImage: "calendar.badge.plus")
+                            }
+                        }
+                        .disabled(isAddingAll)
+                        .confirmationDialog("Add \(pending.count) events to your calendar?",
+                                            isPresented: $confirmAddAll, titleVisibility: .visible) {
+                            Button("Add all \(pending.count)") { Task { await addAll() } }
+                        } message: {
+                            Text("They are added exactly as shown. Overlaps with other events are fine: nothing is skipped.")
+                        }
                     }
                 } header: {
                     Text("Suggested events")
                 } footer: {
-                    Text("Found on this device in the message and its attachments. Check each one: nothing is added to your calendar until you tap Add.")
+                    Text("Found on this device in the message and its attachments. Nothing is added until you tap Add. Events that overlap others are still added: the app never blocks or skips one because of a clash.")
                 }
             } else if !isLoading {
                 Section {
@@ -124,6 +143,20 @@ struct MessageDetailView: View {
             analysis = await model.analysis(for: message)
             proposals = analysis?.proposals ?? []
             isLoading = false
+        }
+    }
+
+    /// Adds every pending suggestion, exactly as shown. A clash never skips an event.
+    private func addAll() async {
+        isAddingAll = true
+        defer { isAddingAll = false }
+        for i in proposals.indices where proposals[i].status == .proposed {
+            do {
+                proposals[i] = try await model.addToCalendar(proposals[i], original: proposals[i])
+            } catch {
+                alertText = error.localizedDescription
+                break
+            }
         }
     }
 
@@ -241,4 +274,9 @@ private struct EventProposalRow: View {
             errorText = error.localizedDescription
         }
     }
+}
+
+private extension EventProposal {
+    /// Changes when the status changes, so a row refreshes to "Added" after Add all.
+    var rowID: String { fingerprint + "-" + status.rawValue }
 }
