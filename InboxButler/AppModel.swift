@@ -3,6 +3,13 @@ import InboxButlerCore
 import WidgetKit
 import UserNotifications
 
+struct UndoToast: Identifiable, Equatable {
+    let id = UUID()
+    let text: String
+    let messageID: String
+    let previous: TriageState?
+}
+
 enum AddAccountError: LocalizedError {
     case googleNotConfigured
     case duplicate(String)
@@ -36,6 +43,12 @@ final class AppModel {
     /// Reply drafts by message id. Written on this device; never sent automatically.
     private(set) var drafts: [String: ReplyDraft] = [:]
     private(set) var isDraftingIDs: Set<String> = []
+    /// App-only Done / Remind-me state by message id. NEVER changes the real mailbox.
+    private(set) var triage: [String: TriageState] = [:]
+    /// Updated every 30 seconds so reminders reappear on time.
+    private(set) var clock = Date()
+    /// "Marked done. Undo" banner.
+    var undoToast: UndoToast?
     /// What the app has learned about how you write (on this device).
     private(set) var styleProfile: StyleProfile?
     /// Calendar access and the calendars events can be added to (iCloud, Google, family...).
@@ -64,6 +77,7 @@ final class AppModel {
     private let calendarWriter = EventKitCalendarWriter()
     private let analyzer = MessageAnalyzer()
     private let draftStore = DraftStore()
+    private let triageStore = TriageStore()
     private let styleStore = StyleProfileStore()
     private var ai: any AIService = DraftAI.make()
     private var providerByAccount: [UUID: any MailProvider] = [:]
@@ -74,11 +88,19 @@ final class AppModel {
         cache = try? MessageCache()
         accounts = accountStore.load()
         styleProfile = styleStore.load()
+        triage = triageStore.all()
         drafts = Dictionary(draftStore.all().filter { $0.status != .discarded }.map { ($0.inReplyToMessageID, $0) },
                             uniquingKeysWith: { _, new in new })
         configureProviders()
         // Offline-first: show what we already have before the network answers.
         if !usingDemoData, let cache { messages = cache.load() }
+        // Let reminders come back on time while the app is open.
+        Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                self?.clock = Date()
+            }
+        }
     }
 
     func account(for id: UUID) -> MailAccount? {
@@ -194,6 +216,8 @@ final class AppModel {
         cache?.remove(accountID: account.id)
         proposalStore.removeMessages(withPrefix: account.id.uuidString + "/")
         draftStore.removeMessages(withPrefix: account.id.uuidString + "/")
+        triageStore.removeMessages(withPrefix: account.id.uuidString + "/")
+        triage = triage.filter { !$0.key.hasPrefix(account.id.uuidString + "/") }
         drafts = drafts.filter { !$0.key.hasPrefix(account.id.uuidString + "/") }
         accounts.removeAll { $0.id == account.id }
         errors[account.id] = nil
@@ -267,12 +291,93 @@ final class AppModel {
         guard let i = messages.firstIndex(where: { $0.id == message.id }) else { return }
         messages[i].isRead = true
         cache?.markReadLocally(message.id)
+        // Opening a reminder that has come back counts as dealing with it.
+        if TriageLogic.hasResurfaced(triage[message.id], now: clock) {
+            setTriage(nil, for: message.id)
+            notifier.cancelReminder(id: message.id)
+        }
+    }
+
+    // MARK: Triage: Done and Remind me (app-only)
+
+    func isHidden(_ message: MailMessage) -> Bool { TriageLogic.isHidden(triage[message.id], now: clock) }
+    func isDone(_ message: MailMessage) -> Bool { TriageLogic.isDone(triage[message.id]) }
+    func hasResurfaced(_ message: MailMessage) -> Bool { TriageLogic.hasResurfaced(triage[message.id], now: clock) }
+
+    /// What the inbox shows: everything except Done and not-yet-due reminders. Reminders that
+    /// have come back sit at the top.
+    var inboxMessages: [MailMessage] {
+        messages.filter { !isHidden($0) }.sorted { a, b in
+            let (ra, rb) = (hasResurfaced(a), hasResurfaced(b))
+            if ra != rb { return ra }
+            return a.receivedAt > b.receivedAt
+        }
+    }
+
+    var snoozedMessages: [MailMessage] {
+        messages.filter { TriageLogic.isSnoozed(triage[$0.id], now: clock) }
+            .sorted { (triage[$0.id]?.remindAt ?? .distantFuture) < (triage[$1.id]?.remindAt ?? .distantFuture) }
+    }
+
+    var doneMessages: [MailMessage] {
+        messages.filter { isDone($0) }.sorted { (triage[$0.id]?.updatedAt ?? .distantPast) > (triage[$1.id]?.updatedAt ?? .distantPast) }
+    }
+
+    func markDone(_ message: MailMessage) {
+        apply(TriageState(isDone: true), to: message, toast: "Marked done")
+    }
+
+    func remind(_ message: MailMessage, at date: Date) {
+        let when = date.formatted(.dateTime.weekday(.abbreviated).hour().minute())
+        apply(TriageState(remindAt: date), to: message, toast: "Reminder set for \(when)")
+    }
+
+    func restoreToInbox(_ message: MailMessage) {
+        apply(nil, to: message, toast: "Back in your inbox")
+    }
+
+    func undo(_ toast: UndoToast) {
+        setTriage(toast.previous, for: toast.messageID)
+        notifier.cancelReminder(id: toast.messageID)
+        if let previous = toast.previous, let at = previous.remindAt, !previous.isDone, at > Date(),
+           let message = messages.first(where: { $0.id == toast.messageID }) {
+            Task { await scheduleReminderNotification(for: message, at: at) }
+        }
+        undoToast = nil
+        publishWidgetSnapshot()
+    }
+
+    private func apply(_ new: TriageState?, to message: MailMessage, toast text: String) {
+        let previous = triage[message.id]
+        setTriage(new, for: message.id)
+        if let new, !new.isDone, let at = new.remindAt {
+            Task { await scheduleReminderNotification(for: message, at: at) }
+        } else {
+            notifier.cancelReminder(id: message.id)
+        }
+        let toast = UndoToast(text: text, messageID: message.id, previous: previous)
+        undoToast = toast
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            if self?.undoToast?.id == toast.id { self?.undoToast = nil }
+        }
+        publishWidgetSnapshot()
+    }
+
+    private func setTriage(_ state: TriageState?, for id: String) {
+        triage[id] = state
+        if !usingDemoData { triageStore.set(state, for: id) }
+    }
+
+    private func scheduleReminderNotification(for message: MailMessage, at date: Date) async {
+        await notifier.scheduleReminder(id: message.id, title: "Back in your inbox",
+                                        subtitle: message.from.display, body: message.subject, at: date)
     }
 
     /// Writes the small summary the widget reads (App Group file) and asks
     /// WidgetKit to refresh. Contains sender/subject text; see README privacy notes.
     func publishWidgetSnapshot() {
-        let snapshot = WidgetSnapshot.make(messages: messages, accounts: accounts,
+        let snapshot = WidgetSnapshot.make(messages: inboxMessages, accounts: accounts,
                                            events: usingDemoData ? [] : proposalStore.all(),
                                            priority: prioritySenders,
                                            redact: AppSettings.bool(AppSettings.redactKey, default: false))
@@ -434,7 +539,7 @@ final class AppModel {
     /// Gets drafts ready for priority mail that is waiting on you (max 3 per refresh).
     func prepareDrafts() async {
         guard !usingDemoData else { return }
-        let candidates = messages.filter { $0.awaitingReply && isPriority($0) && drafts[$0.id] == nil && !isFromMe($0) }.prefix(3)
+        let candidates = inboxMessages.filter { $0.awaitingReply && isPriority($0) && drafts[$0.id] == nil && !isFromMe($0) }.prefix(3)
         for message in candidates { await generateDraft(for: message) }
     }
 
@@ -477,7 +582,7 @@ final class AppModel {
             notifiedStore.add(messages.map(\.id))
             return
         }
-        let plan = NotificationPlanner.plan(messages: messages, accounts: accounts,
+        let plan = NotificationPlanner.plan(messages: inboxMessages, accounts: accounts,
                                             priority: prioritySenders, alreadyNotified: notified)
         // Without permission, just record everything so enabling notifications
         // later doesn't dump a backlog of old mail.
@@ -488,7 +593,7 @@ final class AppModel {
         for item in plan { await notifier.post(item) }
         // Record everything except priority mail that was held back by the
         // per-run cap, so it is delivered on the next run.
-        let held = Set(NotificationPlanner.plan(messages: messages, accounts: accounts,
+        let held = Set(NotificationPlanner.plan(messages: inboxMessages, accounts: accounts,
                                                 priority: prioritySenders,
                                                 alreadyNotified: notified.union(plan.map(\.id))).map(\.id))
         notifiedStore.add(messages.map(\.id).filter { !held.contains($0) })
@@ -517,8 +622,8 @@ final class AppModel {
         let events = usingDemoData ? [] : proposalStore.all().filter {
             $0.status != .dismissed && calendar.isDate($0.start, inSameDayAs: next)
         }
-        let text = MorningBrief.text(priorityUnread: messages.filter { !$0.isRead && isPriority($0) }.count,
-                                     needsReply: messages.filter(\.awaitingReply).count,
+        let text = MorningBrief.text(priorityUnread: inboxMessages.filter { !$0.isRead && isPriority($0) }.count,
+                                     needsReply: inboxMessages.filter(\.awaitingReply).count,
                                      eventsToday: events.count)
         await notifier.scheduleMorningBrief(at: next, title: text.title, body: text.body)
     }

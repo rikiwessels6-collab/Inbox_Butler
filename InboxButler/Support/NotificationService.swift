@@ -36,6 +36,27 @@ struct NotificationService {
 }
 
 extension NotificationService {
+    /// A local notification when a "Remind me" comes due.
+    func scheduleReminder(id: String, title: String, subtitle: String, body: String, at date: Date) async {
+        guard date > Date(), await status() == .authorized else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.subtitle = subtitle
+        content.body = body
+        content.sound = .default
+        content.userInfo = ["messageID": id]
+        let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
+        try? await UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: "reminder:" + id, content: content, trigger: trigger))
+    }
+
+    func cancelReminder(id: String) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["reminder:" + id])
+    }
+}
+
+extension NotificationService {
     private static let briefID = "morning-brief"
 
     func cancelMorningBrief() {
