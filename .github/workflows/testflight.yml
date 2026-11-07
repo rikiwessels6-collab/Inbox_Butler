@@ -55,19 +55,17 @@ jobs:
           printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8"
           echo "KEY_PATH=$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" >> "$GITHUB_ENV"
 
-      - name: Archive
+      - name: Archive (unsigned; Apple signs it at export)
+        # Signing here would need a development profile, which needs a registered test device.
+        # TestFlight only needs the distribution signature added at export, below.
         run: |
           xcodebuild archive \
             -project InboxButler.xcodeproj \
             -scheme InboxButler \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/InboxButler.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGNING_ALLOWED=NO \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" > archive.log 2>&1 && status=0 || status=$?
           echo "---- errors ----"; grep -E "error:" archive.log | sort -u | head -40
           echo "---- tail ----"; tail -n 15 archive.log
