@@ -188,7 +188,7 @@ struct WelcomeView: View {
             Circle()
                 .stroke(Theme.accent.opacity(0.8), lineWidth: 1.5)
                 .frame(width: 102, height: 102)
-            Image(systemName: "person.crop.square.filled.and.at.rectangle")
+            Image(systemName: "person.crop.circle.fill")
                 .font(.system(size: 43, weight: .ultraLight))
                 .foregroundStyle(.white)
                 .accessibilityHidden(true)
