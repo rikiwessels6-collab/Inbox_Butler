@@ -161,6 +161,7 @@ struct UnifiedInboxView: View {
             if model.usingDemoData { demoBanner }
             if sizeClass == .compact {
                 focusStrip
+                splitInboxChips
                 chips
             }
         }
@@ -222,6 +223,21 @@ struct UnifiedInboxView: View {
                 .buttonStyle(PrimaryButtonStyle())
         }
         .card(padding: 14)
+    }
+
+    /// One-tap split inboxes modelled on fast-triage workflows.
+    /// These are existing app filters, not new server-side mailbox folders.
+    private var splitInboxChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("Important", .priority)
+                chip("Other", .other)
+                chip("Newsletters", .newsletters)
+                chip("All mail", .all)
+            }
+            .padding(.vertical, 2)
+        }
+        .accessibilityLabel("Split inbox categories")
     }
 
     private var chips: some View {
