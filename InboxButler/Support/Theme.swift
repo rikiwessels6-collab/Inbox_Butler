@@ -19,18 +19,20 @@ extension Color {
     }
 }
 
-/// The app's design language: warm neutrals, one confident accent, serif headings.
+/// Inbox Butler's cinematic identity: deep ink, restrained teal, and accessible surfaces.
 enum Theme {
-    static let background = Color.dynamic(light: 0xF6F5F2, dark: 0x0E0E10)
-    static let surface    = Color.dynamic(light: 0xFFFFFF, dark: 0x1A1A1D)
-    static let ink        = Color.dynamic(light: 0x141416, dark: 0xF2F2F4)
-    static let muted      = Color.dynamic(light: 0x6B6B73, dark: 0x9A9AA3)
-    static let hairline   = Color.dynamic(light: 0xE6E3DD, dark: 0x2B2B30)
-    static let accent     = Color.dynamic(light: 0x3E4BD1, dark: 0x8D98FF)
+    static let background = Color.dynamic(light: 0xF4F7F9, dark: 0x090D1B)
+    static let surface    = Color.dynamic(light: 0xFFFFFF, dark: 0x171D32)
+    static let ink        = Color.dynamic(light: 0x14212D, dark: 0xF7F8FF)
+    static let muted      = Color.dynamic(light: 0x576574, dark: 0xA0ABC5)
+    static let hairline   = Color.dynamic(light: 0xDFE6EC, dark: 0x333B57)
+    static let accent     = Color.dynamic(light: 0x087E84, dark: 0x65E2DC)
     static let gold       = Color.dynamic(light: 0xB98310, dark: 0xE3B34C)
     static let good       = Color.dynamic(light: 0x1E8E5A, dark: 0x4CC88B)
     static let warn       = Color.dynamic(light: 0xC2600A, dark: 0xF0A04B)
-    static let radius: CGFloat = 18
+    static let radius: CGFloat = 16
+    static let violet = Color(hex: 0x9477FF)
+    static let elevated = Color.dynamic(light: 0xEDF3F6, dark: 0x202840)
 
     /// Soft, distinct tints for avatars and accounts.
     static let palette: [Color] = [
