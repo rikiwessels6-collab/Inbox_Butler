@@ -150,11 +150,11 @@ struct UnifiedInboxView: View {
 
     /// Date, greeting, a one-line summary, the demo banner and (iPhone) filter chips.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())
                     .font(.caption.weight(.semibold)).tracking(0.8).foregroundStyle(Theme.muted)
-                Text(greeting).font(.serif(.largeTitle)).foregroundStyle(Theme.ink)
+                Text("Inbox").font(.system(.largeTitle, design: .rounded, weight: .bold)).foregroundStyle(Theme.ink)
                 Text(summary).font(.subheadline).foregroundStyle(Theme.muted)
             }
 
@@ -382,7 +382,7 @@ struct MessageRow: View {
                 tags
             }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
