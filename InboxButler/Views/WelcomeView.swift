@@ -149,7 +149,7 @@ struct WelcomeView: View {
             LinearGradient(stops: [
                 .init(color: .black.opacity(0.0), location: 0.0),
                 .init(color: .black.opacity(0.10), location: 0.55),
-                .init(color: .black.opacity(0.55), location: 1.0)
+                .init(color: Color(hex: 0x071321).opacity(0.92), location: 1.0)
             ], startPoint: .top, endPoint: .bottom)
             .ignoresSafeArea()
 
@@ -181,28 +181,44 @@ struct WelcomeView: View {
         .onChange(of: model.usingDemoData) { _, isDemo in if !isDemo { onFinish() } }
     }
 
-    private var brand: some View {
-        VStack(spacing: 14) {
-            Text("Welcome to")
-                .font(.system(.title3, design: .default, weight: .regular))
-                .foregroundStyle(Color.white.opacity(0.85))
-            HStack(spacing: 12) {
-                Image(systemName: "envelope.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color(hex: 0x1B1F4B))
-                    .frame(width: 40, height: 40)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                Text("INBOX BUTLER")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .tracking(3.5)
-                    .foregroundStyle(Color.white)
-            }
-            .accessibilityElement(children: .combine)
-            Text("Your mail, handled.")
-                .font(.system(.subheadline, design: .serif, weight: .regular).italic())
-                .foregroundStyle(Color.white.opacity(0.75))
-                .padding(.top, 2)
+    /// The butler mark is intentionally drawn in SwiftUI so it scales cleanly
+    /// and does not require a third-party brand asset.
+    private var butlerMark: some View {
+        ZStack {
+            Circle()
+                .stroke(Theme.accent.opacity(0.8), lineWidth: 1.5)
+                .frame(width: 102, height: 102)
+            Image(systemName: "person.crop.circle.fill")
+                .font(.system(size: 43, weight: .ultraLight))
+                .foregroundStyle(.white)
+                .accessibilityHidden(true)
+            Image(systemName: "envelope.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.accent)
+                .offset(x: 34, y: 17)
         }
+        .accessibilityLabel("Inbox Butler emblem")
+    }
+
+    private var brand: some View {
+        VStack(spacing: 13) {
+            butlerMark
+                .padding(.bottom, 10)
+            Text("Inbox Butler")
+                .font(.system(size: 38, weight: .semibold, design: .rounded))
+                .minimumScaleFactor(0.75)
+                .lineLimit(1)
+                .foregroundStyle(.white)
+            Text("YOUR PERSONAL EMAIL ASSISTANT")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .tracking(2.1)
+                .foregroundStyle(Theme.accent)
+            Text("Your inbox, thoughtfully handled.")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.white.opacity(0.92))
+                .padding(.top, 10)
+        }
+        .frame(maxWidth: .infinity)
         .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
     }
 

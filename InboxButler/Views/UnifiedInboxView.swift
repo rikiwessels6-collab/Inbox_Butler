@@ -150,21 +150,65 @@ struct UnifiedInboxView: View {
 
     /// Date, greeting, a one-line summary, the demo banner and (iPhone) filter chips.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())
                     .font(.caption.weight(.semibold)).tracking(0.8).foregroundStyle(Theme.muted)
-                Text(greeting).font(.serif(.largeTitle)).foregroundStyle(Theme.ink)
+                Text("Inbox").font(.system(.largeTitle, design: .rounded, weight: .bold)).foregroundStyle(Theme.ink)
                 Text(summary).font(.subheadline).foregroundStyle(Theme.muted)
             }
 
             if model.usingDemoData { demoBanner }
-            if sizeClass == .compact { chips }
+            if sizeClass == .compact {
+                focusStrip
+                splitInboxChips
+                chips
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// A glanceable triage bar that navigates to the existing inbox filters.
+    /// All figures are derived from AppModel rather than a separate AI service.
+    private var focusStrip: some View {
+        HStack(spacing: 8) {
+            focusButton("Important", count: unreadCount(.priority), icon: "star.fill", destination: .priority)
+            focusButton("Needs reply", count: unreadCount(.needsReply), icon: "arrowshape.turn.up.left", destination: .needsReply)
+            focusButton("Waiting", count: model.waitingOnOthers.count, icon: "clock", destination: .waiting)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Inbox focus shortcuts")
+    }
+
+    private func focusButton(_ title: String, count: Int, icon: String, destination: InboxFilter) -> some View {
+        Button {
+            withAnimation(.snappy) { filter = destination }
+        } label: {
+            VStack(alignment: .leading, spacing: 7) {
+                Image(systemName: icon)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+                Text("\\(count)")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(Theme.ink)
+                    .contentTransition(.numericText())
+                Text(title)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.hairline, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\\(title), \\(count)")
+        .accessibilityHint("Show messages in this category")
     }
 
     private var demoBanner: some View {
@@ -179,6 +223,21 @@ struct UnifiedInboxView: View {
                 .buttonStyle(PrimaryButtonStyle())
         }
         .card(padding: 14)
+    }
+
+    /// One-tap split inboxes modelled on fast-triage workflows.
+    /// These are existing app filters, not new server-side mailbox folders.
+    private var splitInboxChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("Important", .priority)
+                chip("Other", .other)
+                chip("Newsletters", .newsletters)
+                chip("All mail", .all)
+            }
+            .padding(.vertical, 2)
+        }
+        .accessibilityLabel("Split inbox categories")
     }
 
     private var chips: some View {
@@ -382,7 +441,7 @@ struct MessageRow: View {
                 tags
             }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
