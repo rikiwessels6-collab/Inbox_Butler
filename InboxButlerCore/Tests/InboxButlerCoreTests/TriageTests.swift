@@ -142,6 +142,13 @@ final class InboxClarityTests: XCTestCase {
         XCTAssertEqual(PreviewText.clean(raw), "3 bed, 2 bath Study")
         XCTAssertEqual(PreviewText.clean("Hello there"), "Hello there")
     }
+
+    func testGistDropsGreetingAndStopsAtSentence() {
+        XCTAssertEqual(PreviewText.gist("Hi Riki, can you send the signed form by Friday? Thanks so much"),
+                       "Can you send the signed form by Friday?")
+        XCTAssertEqual(PreviewText.gist("short"), "Short")
+        XCTAssertTrue(PreviewText.gist(String(repeating: "word ", count: 80)).hasSuffix("…"))
+    }
 }
 
 final class TodayBriefTests: XCTestCase {

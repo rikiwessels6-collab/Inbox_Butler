@@ -21,4 +21,26 @@ public enum PreviewText {
         let trimSet = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "-–—|·•:;,"))
         return out.trimmingCharacters(in: trimSet)
     }
+
+    /// A one-line gist for personal mail: drops the greeting ("Hi Sam,") and stops at the end of
+    /// the first sentence. Extractive, so it is instant, offline and never invents anything.
+    public static func gist(_ text: String, limit: Int = 140) -> String {
+        var out = clean(text)
+        if let comma = out.firstIndex(of: ","), out.distance(from: out.startIndex, to: comma) <= 24 {
+            let lead = out[..<comma].lowercased()
+            if ["hi", "hello", "hey", "dear", "good morning", "good afternoon", "good evening"].contains(where: { lead.hasPrefix($0) }) {
+                out = String(out[out.index(after: comma)...]).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        if let end = out.firstIndex(where: { ".!?".contains($0) }), out.distance(from: out.startIndex, to: end) >= 12,
+           out.distance(from: out.startIndex, to: end) < limit {
+            out = String(out[...end])
+        }
+        if out.count > limit {
+            let cut = String(out.prefix(limit))
+            out = (cut.lastIndex(of: " ").map { String(cut[..<$0]) } ?? cut) + "…"
+        }
+        if let first = out.first { out = first.uppercased() + out.dropFirst() }
+        return out
+    }
 }

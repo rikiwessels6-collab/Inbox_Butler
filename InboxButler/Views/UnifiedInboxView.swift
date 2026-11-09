@@ -445,7 +445,7 @@ struct MessageRow: View {
                     .font(.subheadline.weight(unread ? .medium : .regular))
                     .foregroundStyle(Theme.ink)
                     .lineLimit(1)
-                Text(PreviewText.clean(message.snippet))
+                Text(message.isBulk ? PreviewText.clean(message.snippet) : PreviewText.gist(message.snippet))
                     .font(.subheadline)
                     .foregroundStyle(Theme.muted)
                     .lineLimit(2)
