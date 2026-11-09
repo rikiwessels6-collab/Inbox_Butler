@@ -112,3 +112,34 @@ final class TriageTests: XCTestCase {
         XCTAssertTrue(out.instructions.contains("Cricket Australia"))
     }
 }
+
+final class InboxClarityTests: XCTestCase {
+    private func msg(_ subject: String, snippet: String = "", bulk: Bool = false) -> MailMessage {
+        MailMessage(accountID: UUID(), providerMessageID: UUID().uuidString,
+                    from: MailAddress(name: "Google", address: "no-reply@accounts.google.com"),
+                    subject: subject, snippet: snippet, receivedAt: Date(), isBulk: bulk)
+    }
+
+    func testSecurityAlertFromNoReplyIsSecurityNotNewsletter() {
+        let m = msg("Security alert for you@gmail.com", bulk: true)
+        XCTAssertEqual(MessageLabeler.labels(for: m).first?.kind, .security)
+        XCTAssertFalse(MessageLabeler.labels(for: m).contains { $0.kind == .newsletter })
+        XCTAssertTrue(MessageLabeler.isActionable(m))
+    }
+
+    func testAccountRecoveredIsSecurity() {
+        XCTAssertTrue(MessageLabeler.isActionable(msg("Your Google Account was recovered successfully", bulk: true)))
+    }
+
+    func testMarketingStaysNewsletter() {
+        let m = msg("Your holiday shopping just got better", bulk: true)
+        XCTAssertEqual(MessageLabeler.labels(for: m).map(\.kind), [.newsletter])
+        XCTAssertFalse(MessageLabeler.isActionable(m))
+    }
+
+    func testPreviewCleaning() {
+        let raw = "View in browser https://example.com/track?id=1 \u{200C}\u{200C} 3 bed, 2 bath   Study"
+        XCTAssertEqual(PreviewText.clean(raw), "3 bed, 2 bath Study")
+        XCTAssertEqual(PreviewText.clean("Hello there"), "Hello there")
+    }
+}

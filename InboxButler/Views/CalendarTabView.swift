@@ -63,14 +63,30 @@ struct CalendarTabView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     timeline
-                        .padding(.bottom, 24)
+                        .padding(.bottom, 110)   // clear of the floating tab bar
                 }
                 .scrollIndicators(.hidden)
-                .onAppear { proxy.scrollTo("hour-7", anchor: .top) }
+                .task(id: focusKey) {
+                    // Wait a beat so the timeline has laid out, then land on "now" (today) or the
+                    // first event of the chosen day, never on the empty small hours.
+                    try? await Task.sleep(for: .milliseconds(200))
+                    withAnimation(.snappy) { proxy.scrollTo("hour-\(focusHour)", anchor: .top) }
+                }
             }
         }
         .task(id: weekStart) { await load() }
         .onChange(of: model.calendarAccess) { _, _ in Task { await load() } }
+    }
+
+    private var focusKey: String { "\(selectedDay.timeIntervalSince1970)-\(events.count)" }
+
+    private var focusHour: Int {
+        let dayStart = cal.startOfDay(for: selectedDay)
+        if cal.isDateInToday(selectedDay) { return min(max(cal.component(.hour, from: Date()) - 1, 0), 23) }
+        if let first = clampedTimedEvents(on: dayStart).map({ cal.component(.hour, from: $0.start) }).min() {
+            return max(first - 1, 0)
+        }
+        return 7
     }
 
     private var header: some View {

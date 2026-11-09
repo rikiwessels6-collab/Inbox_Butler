@@ -92,6 +92,14 @@ struct UnifiedInboxView: View {
                     .selectionDisabled()
             }
 
+            if showBundle {
+                bundleRow
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .selectionDisabled()
+            }
+
             ForEach(items) { message in
                 MessageRow(message: message,
                            account: model.account(for: message.accountID),
@@ -146,6 +154,31 @@ struct UnifiedInboxView: View {
                                        description: Text(search.isEmpty ? "Nothing here right now." : "Try a different search."))
             }
         }
+    }
+
+    private var quietCount: Int { model.inboxMessages.filter(isQuiet).count }
+    private var showBundle: Bool { (filter ?? .all) == .all && search.isEmpty && quietCount > 0 }
+
+    /// One tidy row for all the newsletters and promotions, instead of dozens of rows of noise.
+    private var bundleRow: some View {
+        Button { withAnimation(.snappy) { filter = .newsletters } } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "newspaper")
+                    .font(.title3).foregroundStyle(Theme.accent)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.accent.opacity(0.12), in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(quietCount) newsletters and promotions").font(.subheadline.weight(.semibold))
+                    Text("Set aside so your inbox shows what matters").font(.footnote).foregroundStyle(Theme.muted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.muted)
+            }
+            .foregroundStyle(Theme.ink)
+            .card(padding: 12)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("newsletter-bundle")
     }
 
     /// Date, greeting, a one-line summary, the demo banner and (iPhone) filter chips.
@@ -245,8 +278,16 @@ struct UnifiedInboxView: View {
         return parts.isEmpty ? "You're all caught up." : parts.joined(separator: " · ")
     }
 
+    /// Important = a priority sender, something that needs you (security alert, invoice,
+    /// appointment, an unanswered reply), or mail the scorer rates highly.
     private func isImportant(_ m: MailMessage) -> Bool {
-        !m.isBulk && (model.isPriority(m) || (m.importance ?? 0) >= 0.7)
+        model.isPriority(m) || m.awaitingReply || MessageLabeler.isActionable(m)
+            || (!m.isBulk && (m.importance ?? 0) >= 0.7)
+    }
+
+    /// Marketing and mailing lists that need nothing from you. Set aside in one row.
+    private func isQuiet(_ m: MailMessage) -> Bool {
+        m.isBulk && !isImportant(m)
     }
 
     private func unreadCount(_ value: InboxFilter) -> Int {
@@ -255,7 +296,7 @@ struct UnifiedInboxView: View {
         case .all: return inbox.filter { !$0.isRead }.count
         case .priority: return inbox.filter { !$0.isRead && isImportant($0) }.count
         case .other: return inbox.filter { !$0.isRead && !isImportant($0) && !$0.isBulk }.count
-        case .newsletters: return inbox.filter { !$0.isRead && $0.isBulk }.count
+        case .newsletters: return inbox.filter { !$0.isRead && isQuiet($0) }.count
         case .needsReply: return inbox.filter(\.awaitingReply).count
         case .waiting: return model.waitingOnOthers.count
         case .drafts: return inbox.filter { model.drafts[$0.id] != nil }.count
@@ -284,11 +325,11 @@ struct UnifiedInboxView: View {
         let inbox = model.inboxMessages
         let base: [MailMessage]
         switch filter ?? .all {
-        case .all: base = inbox
+        case .all: base = inbox.filter { !isQuiet($0) }
         case .priority: base = inbox.filter(isImportant)
         case .other: base = inbox.filter { !isImportant($0) && !$0.isBulk }
         case .needsReply: base = inbox.filter(\.awaitingReply)
-        case .newsletters: base = inbox.filter(\.isBulk)
+        case .newsletters: base = inbox.filter(isQuiet)
         case .waiting: base = model.waitingOnOthers
         case .drafts: base = inbox.filter { model.drafts[$0.id] != nil }
         case .reminders: base = model.snoozedMessages
@@ -375,7 +416,7 @@ struct MessageRow: View {
                     .font(.subheadline.weight(unread ? .medium : .regular))
                     .foregroundStyle(Theme.ink)
                     .lineLimit(1)
-                Text(message.snippet)
+                Text(PreviewText.clean(message.snippet))
                     .font(.subheadline)
                     .foregroundStyle(Theme.muted)
                     .lineLimit(2)

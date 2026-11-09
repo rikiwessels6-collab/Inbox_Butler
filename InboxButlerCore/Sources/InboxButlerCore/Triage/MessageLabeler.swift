@@ -26,7 +26,7 @@ public struct MessageLabel: Hashable, Identifiable, Sendable {
 /// and attachments: instant, works offline, and nothing leaves the device.
 public enum MessageLabeler {
     private static let rules: [(MessageLabel.Kind, [String])] = [
-        (.security, ["verification code", "security code", "one-time", "sign-in", "sign in attempt", "login attempt", "password reset", "reset your password", "2fa", "suspicious"]),
+        (.security, ["verification code", "security code", "one-time", "sign-in", "sign in attempt", "login attempt", "password reset", "reset your password", "2fa", "suspicious", "security alert", "was recovered", "new sign-in", "new login", "unusual activity", "account recovery"]),
         (.invoice, ["invoice", "amount due", "payment due", "payment reminder", "statement", "overdue", "bill for"]),
         (.receipt, ["receipt", "order confirmation", "your order", "thanks for your purchase", "payment received", "payment confirmation"]),
         (.travel, ["flight", "itinerary", "boarding", "check-in", "e-ticket", "booking reference", "hotel", "reservation confirmed"]),
@@ -45,8 +45,17 @@ public enum MessageLabeler {
         if !message.isBulk, message.attachments.contains(where: { $0.kind == .pdf || $0.kind == .wordDocument }),
            !found.contains(.toReview), !found.contains(.invoice), !found.contains(.receipt) { found.append(.toReview) }
         // Mailing-list mail is a newsletter unless something more specific matched.
-        if message.isBulk, !found.contains(.receipt), !found.contains(.delivery), !found.contains(.security) { found.append(.newsletter) }
+        if message.isBulk, !found.contains(where: { [.receipt, .delivery, .security, .invoice, .appointment].contains($0) }) {
+            found.append(.newsletter)
+        }
 
         return Array(found.prefix(max)).map { MessageLabel(kind: $0) }
+    }
+
+    /// Mail that needs a person even when it comes from a no-reply address: security alerts,
+    /// invoices and appointments. Keeps these out of the "newsletters" pile.
+    public static func isActionable(_ message: MailMessage) -> Bool {
+        let kinds = labels(for: message, max: 9).map(\.kind)
+        return kinds.contains { [.security, .invoice, .appointment].contains($0) }
     }
 }
