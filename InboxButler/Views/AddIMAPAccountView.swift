@@ -45,19 +45,39 @@ struct AddIMAPAccountView: View {
                             field("Username (if different from email)", text: $username)
                         }
                         divider
-                        HStack {
+                        HStack(spacing: 10) {
                             SecureField(isICloud ? "App-specific password" : "Password", text: $password)
                                 .textContentType(.password)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
+                            if isICloud {
+                                if looksLikeAppPassword {
+                                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.good)
+                                        .accessibilityLabel("Looks like an app-specific password")
+                                }
+                                PasteButton(payloadType: String.self) { strings in
+                                    if let first = strings.first {
+                                        password = first.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    }
+                                }
+                                .labelStyle(.titleOnly)
+                                .buttonBorderShape(.capsule)
+                                .tint(Theme.accent)
+                            }
                         }
                         .padding(14)
                     }
                     .card(padding: 0)
 
-                    if let errorText {
-                        Label(errorText, systemImage: "exclamationmark.triangle.fill")
-                            .font(.footnote).foregroundStyle(Theme.warn)
+                                if let errorText {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label(errorText, systemImage: "exclamationmark.triangle.fill")
+                                .font(.footnote).foregroundStyle(Theme.warn)
+                            if isICloud && !looksLikeAppPassword {
+                                Text("Make sure you pasted the app-specific password (16 letters), not your normal Apple ID password.")
+                                    .font(.footnote).foregroundStyle(Theme.muted)
+                            }
+                        }
                     }
 
                     Button {
@@ -84,18 +104,38 @@ struct AddIMAPAccountView: View {
     }
 
     private var howTo: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "First, make an app-specific password")
-            VStack(alignment: .leading, spacing: 6) {
-                Text("iCloud doesn't let apps use your Apple ID password. Create a special one:")
-                    .font(.subheadline).foregroundStyle(Theme.ink)
-                Text("1. Open appleid.apple.com and sign in\n2. Sign-In and Security > App-Specific Passwords\n3. Tap + , name it Inbox Butler, and copy the code (it looks like abcd-efgh-ijkl-mnop)")
-                    .font(.footnote).foregroundStyle(Theme.muted)
-                Link("Open appleid.apple.com", destination: URL(string: "https://appleid.apple.com")!)
-                    .font(.footnote.weight(.semibold))
+        VStack(alignment: .leading, spacing: 14) {
+            SectionLabel(text: "Two minutes, one time")
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Apple doesn't let apps use your Apple ID password, so you create a special one just for Inbox Butler.")
+                    .font(.subheadline).foregroundStyle(Theme.muted)
+                howStep(1, "Open your Apple Account page and sign in.")
+                Link(destination: URL(string: "https://account.apple.com/account/manage")!) {
+                    Label("Open Apple Account", systemImage: "arrow.up.right.square")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .padding(.leading, 36)
+                howStep(2, "Choose Sign-In and Security, then App-Specific Passwords.")
+                howStep(3, "Tap +, name it Inbox Butler, and copy the code Apple shows (like abcd-efgh-ijkl-mnop).")
+                howStep(4, "Come back here and tap Paste below.")
             }
-            .card(padding: 14)
+            .card(padding: 16)
         }
+    }
+
+    private func howStep(_ n: Int, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(n)")
+                .font(.footnote.weight(.bold)).foregroundStyle(Color.white)
+                .frame(width: 24, height: 24).background(Theme.accent, in: Circle())
+            Text(text).font(.subheadline).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Apple's app-specific passwords look like abcd-efgh-ijkl-mnop.
+    private var looksLikeAppPassword: Bool {
+        let stripped = password.replacingOccurrences(of: "-", with: "").replacingOccurrences(of: " ", with: "")
+        return stripped.count == 16 && stripped.allSatisfy { $0.isLetter }
     }
 
     private var divider: some View { Divider().overlay(Theme.hairline) }

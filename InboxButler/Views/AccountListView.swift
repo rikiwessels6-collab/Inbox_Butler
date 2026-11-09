@@ -8,6 +8,7 @@ struct AccountListView: View {
     @State private var message: String?
     @State private var pendingRemoval: MailAccount?
     @State private var imapSheet: AccountKind?
+    @State private var showGoogleHeadsUp = false
 
     var body: some View {
         NavigationStack {
@@ -31,6 +32,9 @@ struct AccountListView: View {
             .background(Theme.background.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $imapSheet) { kind in AddIMAPAccountView(kind: kind) }
+            .sheet(isPresented: $showGoogleHeadsUp) {
+                GoogleHeadsUpSheet { Task { await addGmail() } }
+            }
             .alert("Accounts", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -95,7 +99,7 @@ struct AccountListView: View {
             SectionLabel(text: "Add an account")
             VStack(spacing: 0) {
                 providerRow(.gmail, title: "Google", subtitle: "Gmail, read-only", busy: isSigningIn) {
-                    Task { await addGmail() }
+                    showGoogleHeadsUp = true
                 }
                 Divider().overlay(Theme.hairline).padding(.leading, 70)
                 providerRow(.icloud, title: "iCloud Mail", subtitle: "Uses an app-specific password") {

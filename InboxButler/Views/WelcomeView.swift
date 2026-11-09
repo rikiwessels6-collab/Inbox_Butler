@@ -136,6 +136,7 @@ struct WelcomeView: View {
     @State private var drift = false
     @State private var isSigningIn = false
     @State private var showICloud = false
+    @State private var showGoogleHeadsUp = false
     @State private var message: String?
 
     var body: some View {
@@ -174,6 +175,9 @@ struct WelcomeView: View {
             withAnimation(.easeInOut(duration: 22).repeatForever(autoreverses: true)) { drift = true }
         }
         .sheet(isPresented: $showICloud) { AddIMAPAccountView(kind: .icloud) }
+        .sheet(isPresented: $showGoogleHeadsUp) {
+            GoogleHeadsUpSheet { Task { await signInWithGoogle() } }
+        }
         .alert("Couldn't connect", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(message ?? "") }
@@ -209,7 +213,7 @@ struct WelcomeView: View {
     private var buttons: some View {
         VStack(spacing: 14) {
             Button {
-                Task { await signInWithGoogle() }
+                showGoogleHeadsUp = true
             } label: {
                 HStack(spacing: 10) {
                     if isSigningIn { ProgressView().tint(.white) }
