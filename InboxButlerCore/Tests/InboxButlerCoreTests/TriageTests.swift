@@ -143,3 +143,35 @@ final class InboxClarityTests: XCTestCase {
         XCTAssertEqual(PreviewText.clean("Hello there"), "Hello there")
     }
 }
+
+final class TodayBriefTests: XCTestCase {
+    private var cal: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }
+    private func at(_ h: Int, _ m: Int = 0) -> Date { cal.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: h, minute: m))! }
+    private func event(_ title: String, _ s: Date, _ e: Date, allDay: Bool = false) -> ExistingEvent {
+        ExistingEvent(title: title, calendarTitle: "Family", start: s, end: e, isAllDay: allDay)
+    }
+    private func mail(_ subject: String, awaiting: Bool = false, read: Bool = false) -> MailMessage {
+        MailMessage(accountID: UUID(), providerMessageID: UUID().uuidString, from: MailAddress(name: "Sam", address: "sam@x.io"),
+                    subject: subject, snippet: "", receivedAt: at(8), isRead: read, awaitingReply: awaiting)
+    }
+
+    func testEventsClashesAndAllDay() {
+        let events = [event("Birthday", at(0), at(23), allDay: true),
+                      event("Dentist", at(15), at(16)),
+                      event("School pickup", at(15, 30), at(16, 30)),
+                      event("Already over", at(6), at(7))]
+        let brief = TodayBrief.make(messages: [], events: events, suggestions: [], now: at(12), calendar: cal)
+        XCTAssertEqual(brief.items.filter { $0.kind == .allDay }.count, 1)
+        XCTAssertEqual(brief.items.filter { $0.kind == .event }.map(\.title), ["Dentist", "School pickup"])
+        XCTAssertEqual(brief.items.filter { $0.kind == .clash }.count, 1)
+    }
+
+    func testMailItemsAndEmpty() {
+        let sec = mail("Security alert for you@gmail.com")
+        let waiting = mail("Quick question", awaiting: true)
+        let brief = TodayBrief.make(messages: [sec, waiting, mail("Old alert, security alert", read: true)], events: [], suggestions: [], now: at(12), calendar: cal)
+        XCTAssertEqual(brief.items.filter { $0.kind == .security }.count, 1)
+        XCTAssertEqual(brief.items.first { $0.kind == .reply }?.messageID, waiting.id)
+        XCTAssertTrue(TodayBrief.make(messages: [], events: [], suggestions: [], now: at(12), calendar: cal).isEmpty)
+    }
+}

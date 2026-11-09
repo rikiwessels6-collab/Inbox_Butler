@@ -19,6 +19,7 @@ struct UnifiedInboxView: View {
     @State private var visibility: NavigationSplitViewVisibility = .automatic
     @State private var compactColumn: NavigationSplitViewColumn = .content   // iPhone opens on the list
     @State private var reminderTarget: MailMessage?
+    @State private var todayEvents: [ExistingEvent] = []
 
     var body: some View {
         NavigationSplitView(columnVisibility: $visibility, preferredCompactColumn: $compactColumn) {
@@ -84,6 +85,17 @@ struct UnifiedInboxView: View {
                 .listRowBackground(Color.clear)
                 .selectionDisabled()
 
+            if showToday {
+                TodayCard(brief: todayBrief) { id in
+                    selectedID = id
+                    compactColumn = .detail
+                }
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 12, trailing: 16))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .selectionDisabled()
+            }
+
             if showCaughtUp {
                 CaughtUpCard()
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 16, trailing: 16))
@@ -119,7 +131,8 @@ struct UnifiedInboxView: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, prompt: "Search all mail")
-        .refreshable { await model.refresh() }
+        .refreshable { await model.refresh(); await loadToday() }
+        .task(id: model.calendarAccess) { await loadToday() }
         .animation(.snappy, value: filter)
         .overlay(alignment: .bottom) {
             if let toast = model.undoToast {
@@ -154,6 +167,22 @@ struct UnifiedInboxView: View {
                                        description: Text(search.isEmpty ? "Nothing here right now." : "Try a different search."))
             }
         }
+    }
+
+    private var todayBrief: TodayBrief {
+        let start = Calendar.current.startOfDay(for: Date())
+        let end = Calendar.current.date(byAdding: .day, value: 2, to: start) ?? start.addingTimeInterval(172_800)
+        return TodayBrief.make(messages: model.inboxMessages, events: todayEvents,
+                               suggestions: model.suggestedEvents(from: start, to: end))
+    }
+    private var showToday: Bool {
+        search.isEmpty && ((filter ?? .all) == .all || (filter ?? .all) == .priority) && !todayBrief.isEmpty
+    }
+
+    private func loadToday() async {
+        let start = Calendar.current.startOfDay(for: Date())
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+        todayEvents = await model.calendarEvents(from: start, to: end)
     }
 
     private var quietCount: Int { model.inboxMessages.filter(isQuiet).count }
