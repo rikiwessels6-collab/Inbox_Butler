@@ -36,4 +36,4 @@ Inbox Butler: a SwiftUI iOS 17+ app (Boundary Line Apps) that merges Gmail, iClo
 - Swift string escapes and CI-only failures: you cannot compile here, so re-read edits carefully (past breakages: invalid `"\;"` escape, duplicate variable names).
 - UI tests launch with `-hasSeenWelcome YES -hasSeenTour YES` and rely on `accessibilityIdentifier`s (`welcome-*`, `tour-*`); overlays use `.accessibilityAddTraits(.isModal)`. Keep those stable when editing views.
 - Google OAuth consent screen is in Testing mode (tokens expire every 7 days; user must be a test user). Client id lives in `InboxButler/Support/AppConfig.swift`.
-- Docs: `README.md`, `ARCHITECTURE.md` (its "not compiled yet" note and IMAP-library decision are stale; the IMAP client is custom), `docs/{SETUP_GOOGLE,TESTFLIGHT,ICLOUD}.md`.
+- Docs: `README.md`, `ARCHITECTURE.md`, `docs/{SETUP_GOOGLE,TESTFLIGHT,ICLOUD}.md`.

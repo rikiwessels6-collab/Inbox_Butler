@@ -171,7 +171,7 @@ demo video. Ask whether you want to pursue this before investing.
    - Hybrid is possible (on-device first, proxy opt-in per account). I have **not**
      implemented either; only the protocol exists.
 2. **First provider** *(decided: Gmail.)*
-3. **IMAP library** *(decided: `swift-nio-imap`.)*
+3. **IMAP library** *(decided: a small custom read-only client on Network.framework, `IMAPClient`; EXAMINE + BODY.PEEK only.)*
 4. **Bundle id and App Group id** *(decided: `com.boundarylineapps.InboxButler`, widget `.Widget`, group `group.com.boundarylineapps.InboxButler`.)* Team id still to fill in `project.yml`.
 5. **Project generation.** I used XcodeGen (`project.yml`) because I cannot author a
    reliable `.xcodeproj` from Linux. If you prefer a committed `.xcodeproj`, generate
@@ -195,5 +195,5 @@ demo video. Ask whether you want to pursue this before investing.
 6. Widget fed by real data (publisher already in place).
 7. AI layer implementation (after you choose).
 
-> Note: the code in this repo was written without a Swift toolchain available, so
-> it has not been compiled yet. Expect a few small compile fixes on first build.
+> Note: there is no Swift toolchain in the authoring environment. Every change is compiled and
+> tested on GitHub Actions macOS runners (see `.github/workflows/ci.yml`), and builds ship via TestFlight.
