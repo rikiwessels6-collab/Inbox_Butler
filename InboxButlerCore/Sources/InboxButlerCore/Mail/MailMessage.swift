@@ -39,6 +39,14 @@ public struct AttachmentInfo: Identifiable, Hashable, Codable, Sendable {
     }
 }
 
+/// A label the user made in their mail account (a Gmail label), shown as a coloured chip.
+public struct MailLabelTag: Hashable, Codable, Sendable {
+    public var name: String
+    /// 0xRRGGBB from the account's own label colour, if it has one.
+    public var colorHex: UInt32?
+    public init(name: String, colorHex: UInt32? = nil) { self.name = name; self.colorHex = colorHex }
+}
+
 /// Provider-independent message used by the whole app.
 public struct MailMessage: Identifiable, Hashable, Codable, Sendable {
     public let accountID: UUID
@@ -58,6 +66,8 @@ public struct MailMessage: Identifiable, Hashable, Codable, Sendable {
     public var awaitingReply: Bool
     /// Newsletter / mailing list / automated sender.
     public var isBulk: Bool
+    /// The user's own labels from the account (Gmail), for display.
+    public var labels: [MailLabelTag]
 
     /// Unique across accounts (provider ids alone can collide).
     public var id: String { "\(accountID.uuidString)/\(providerMessageID)" }
@@ -65,7 +75,8 @@ public struct MailMessage: Identifiable, Hashable, Codable, Sendable {
     public init(accountID: UUID, providerMessageID: String, threadID: String? = nil,
                 from: MailAddress, to: [MailAddress] = [], subject: String, snippet: String,
                 receivedAt: Date, isRead: Bool = false, attachments: [AttachmentInfo] = [],
-                importance: Double? = nil, awaitingReply: Bool = false, isBulk: Bool = false) {
+                importance: Double? = nil, awaitingReply: Bool = false, isBulk: Bool = false,
+                labels: [MailLabelTag] = []) {
         self.accountID = accountID
         self.providerMessageID = providerMessageID
         self.threadID = threadID
@@ -79,5 +90,6 @@ public struct MailMessage: Identifiable, Hashable, Codable, Sendable {
         self.importance = importance
         self.awaitingReply = awaitingReply
         self.isBulk = isBulk
+        self.labels = labels
     }
 }

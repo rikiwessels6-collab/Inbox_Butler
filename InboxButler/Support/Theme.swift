@@ -21,11 +21,11 @@ extension Color {
 
 /// The app's design language: warm neutrals, one confident accent, serif headings.
 enum Theme {
-    static let background = Color.dynamic(light: 0xF6F5F2, dark: 0x0E0E10)
-    static let surface    = Color.dynamic(light: 0xFFFFFF, dark: 0x1A1A1D)
-    static let ink        = Color.dynamic(light: 0x141416, dark: 0xF2F2F4)
-    static let muted      = Color.dynamic(light: 0x6B6B73, dark: 0x9A9AA3)
-    static let hairline   = Color.dynamic(light: 0xE6E3DD, dark: 0x2B2B30)
+    static let background = Color.dynamic(light: 0xF6F5F2, dark: 0x242424)
+    static let surface    = Color.dynamic(light: 0xFFFFFF, dark: 0x303030)
+    static let ink        = Color.dynamic(light: 0x141416, dark: 0xF4F4F4)
+    static let muted      = Color.dynamic(light: 0x6B6B73, dark: 0xA3A3A3)
+    static let hairline   = Color.dynamic(light: 0xE6E3DD, dark: 0x3C3C3C)
     static let accent     = Color.dynamic(light: 0x3E4BD1, dark: 0x8D98FF)
     static let gold       = Color.dynamic(light: 0xB98310, dark: 0xE3B34C)
     static let good       = Color.dynamic(light: 0x1E8E5A, dark: 0x4CC88B)

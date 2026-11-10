@@ -23,6 +23,8 @@ final class StoredMessage {
     var importance: Double?
     var awaitingReply: Bool
     var isBulk: Bool = false
+    /// Account labels (JSON). Optional so older caches open without a migration.
+    var labelsJSON: Data?
 
     init(_ m: MailMessage) {
         id = m.id
@@ -41,6 +43,7 @@ final class StoredMessage {
         importance = m.importance
         awaitingReply = m.awaitingReply
         isBulk = m.isBulk
+        labelsJSON = m.labels.isEmpty ? nil : try? JSONEncoder().encode(m.labels)
     }
 
     /// Refreshes server-owned fields; keeps local-only state (importance, readLocally).
@@ -57,6 +60,7 @@ final class StoredMessage {
         if let imp = m.importance { importance = imp }
         awaitingReply = m.awaitingReply   // derived each refresh by ReplyTracker, never sticky
         isBulk = m.isBulk
+        labelsJSON = m.labels.isEmpty ? nil : try? JSONEncoder().encode(m.labels)
     }
 
     var asMessage: MailMessage {
@@ -66,6 +70,7 @@ final class StoredMessage {
                     subject: subject, snippet: snippet, receivedAt: receivedAt,
                     isRead: isRead || readLocally,
                     attachments: (try? JSONDecoder().decode([AttachmentInfo].self, from: attachmentsJSON)) ?? [],
-                    importance: importance, awaitingReply: awaitingReply, isBulk: isBulk)
+                    importance: importance, awaitingReply: awaitingReply, isBulk: isBulk,
+                    labels: labelsJSON.flatMap { try? JSONDecoder().decode([MailLabelTag].self, from: $0) } ?? [])
     }
 }

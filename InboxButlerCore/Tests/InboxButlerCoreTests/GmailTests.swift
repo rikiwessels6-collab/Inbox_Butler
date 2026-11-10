@@ -91,3 +91,19 @@ final class GmailTests: XCTestCase {
         XCTAssertEqual(String(decoding: data, as: UTF8.self), "hello?")
     }
 }
+
+final class GmailLabelTests: XCTestCase {
+    func testHexColourParsing() {
+        XCTAssertEqual(GmailProvider.parseHexColor("#16a765"), 0x16A765)
+        XCTAssertNil(GmailProvider.parseHexColor("nope"))
+    }
+
+    func testConvertMapsUserLabelsOnly() throws {
+        let json = #"{"id":"1","threadId":"t","labelIds":["INBOX","UNREAD","Label_9"],"snippet":"hi","internalDate":"1700000000000","payload":{"headers":[{"name":"From","value":"A <a@b.c>"},{"name":"Subject","value":"S"}]}}"#
+        let raw = try JSONDecoder().decode(GmailProvider.RawMessage.self, from: Data(json.utf8))
+        let map = ["Label_9": MailLabelTag(name: "cricket - administration", colorHex: 0xB99AFF)]
+        let m = GmailProvider.convert(raw, accountID: UUID(), labelMap: map)
+        XCTAssertEqual(m.labels.map(\.name), ["cricket - administration"])
+        XCTAssertFalse(m.isRead)
+    }
+}

@@ -45,12 +45,13 @@ public struct GmailProvider: MailProvider {
         ])
         guard status == 200 else { throw MailProviderError.network("Gmail returned \(status) listing mail.") }
         let ids = (try? JSONDecoder().decode(ListResponse.self, from: listData))?.messages?.map(\.id) ?? []
+        let labelMap = await fetchLabelMap()
 
         // Fetch details 10 at a time to stay well inside Gmail's rate limits.
         var result: [MailMessage] = []
         for chunk in stride(from: 0, to: ids.count, by: 10).map({ Array(ids[$0..<min($0 + 10, ids.count)]) }) {
             let fetched = try await withThrowingTaskGroup(of: MailMessage?.self) { group in
-                for id in chunk { group.addTask { try await self.fetchOne(id) } }
+                for id in chunk { group.addTask { try await self.fetchOne(id, labelMap: labelMap) } }
                 var out: [MailMessage] = []
                 for try await message in group { if let message { out.append(message) } }
                 return out
@@ -136,7 +137,31 @@ public struct GmailProvider: MailProvider {
         return nil
     }
 
-    private func fetchOne(_ id: String) async throws -> MailMessage? {
+    /// The user's own labels (name and colour), so the inbox can show them. Read-only; if it fails,
+    /// mail simply shows without label chips.
+    func fetchLabelMap() async -> [String: MailLabelTag] {
+        guard let (data, status) = try? await get("labels", query: [.init(name: "fields", value: "labels(id,name,type,color)")]),
+              status == 200, let list = try? JSONDecoder().decode(LabelList.self, from: data) else { return [:] }
+        var map: [String: MailLabelTag] = [:]
+        for label in list.labels ?? [] where label.type == "user" {
+            map[label.id] = MailLabelTag(name: label.name, colorHex: label.color?.backgroundColor.flatMap(Self.parseHexColor))
+        }
+        return map
+    }
+
+    static func parseHexColor(_ s: String) -> UInt32? {
+        UInt32(s.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16)
+    }
+
+    private struct LabelList: Decodable {
+        struct Label: Decodable {
+            struct Color: Decodable { let backgroundColor: String? }
+            let id: String; let name: String; let type: String?; let color: Color?
+        }
+        let labels: [Label]?
+    }
+
+    private func fetchOne(_ id: String, labelMap: [String: MailLabelTag] = [:]) async throws -> MailMessage? {
         let (data, status) = try await get("messages/\(id)", query: [
             .init(name: "format", value: "full"),
             .init(name: "fields", value: Self.messageFields)
@@ -145,7 +170,7 @@ public struct GmailProvider: MailProvider {
         guard status == 200, let raw = try? JSONDecoder().decode(RawMessage.self, from: data) else {
             throw MailProviderError.network("Gmail returned \(status) reading a message.")
         }
-        return Self.convert(raw, accountID: account.id)
+        return Self.convert(raw, accountID: account.id, labelMap: labelMap)
     }
 
     /// GET with a bearer token. On 401 refreshes the token once and retries.
@@ -196,7 +221,7 @@ public struct GmailProvider: MailProvider {
         let payload: Part?
     }
 
-    static func convert(_ raw: RawMessage, accountID: UUID) -> MailMessage {
+    static func convert(_ raw: RawMessage, accountID: UUID, labelMap: [String: MailLabelTag] = [:]) -> MailMessage {
         func header(_ name: String) -> String? {
             raw.payload?.headers?.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.value
         }
@@ -217,7 +242,8 @@ public struct GmailProvider: MailProvider {
             receivedAt: Date(timeIntervalSince1970: millis / 1000),
             isRead: !(raw.labelIds ?? []).contains("UNREAD"),
             attachments: attachments(in: raw.payload),
-            isBulk: bulk
+            isBulk: bulk,
+            labels: (raw.labelIds ?? []).compactMap { labelMap[$0] }.sorted { $0.name < $1.name }
         )
     }
 
