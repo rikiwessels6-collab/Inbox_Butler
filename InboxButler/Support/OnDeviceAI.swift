@@ -14,6 +14,9 @@ enum DraftAI {
         return TemplateDraftService()
     }
 
+    /// True when Apple's on-device model can write drafts on this phone.
+    static var onDeviceAvailable: Bool { unavailableReason == nil }
+
     /// Why the on-device model isn't being used, in plain words. nil when it is available.
     static var unavailableReason: String? {
         #if canImport(FoundationModels)

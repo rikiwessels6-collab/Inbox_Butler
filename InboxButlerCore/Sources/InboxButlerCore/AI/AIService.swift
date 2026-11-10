@@ -5,6 +5,7 @@ import Foundation
 public enum AIProcessingLocation: String, Codable, Sendable {
     case onDevice          // Apple Foundation Models: nothing leaves the device
     case backendProxy      // text is sent to the user's own proxy server
+    case cloud             // OPT-IN: the email being replied to goes to Anthropic's API, using the user's own key
     case unconfigured      // no AI layer chosen yet
 }
 
@@ -21,7 +22,7 @@ public enum AIServiceError: Error, LocalizedError, Sendable {
 
 /// The AI layer. DECISION PENDING: on-device Foundation Models vs. backend proxy
 /// (see ARCHITECTURE.md, open question 1). Either way:
-///  - no API key ever lives in the app;
+///  - no API key is ever built into the app (a person's OWN key, if they choose cloud drafts, lives only in their Keychain);
 ///  - drafts are returned for review and are never sent automatically.
 public protocol AIService: Sendable {
     var processingLocation: AIProcessingLocation { get }

@@ -16,6 +16,11 @@ struct SettingsView: View {
     @AppStorage(AppSettings.redactKey) private var redactWidget = false
     @AppStorage(AppSettings.lockKey) private var lockEnabled = false
     @State private var writer = WriterProfile()
+    @AppStorage(CloudDrafts.modeKey) private var cloudModeRaw = CloudDrafts.Mode.off.rawValue
+    @AppStorage(CloudDrafts.modelKey) private var cloudModelRaw = CloudModel.opus.rawValue
+    @State private var cloudKeyInput = ""
+    @State private var cloudHasKey = CloudDrafts.hasKey
+    @State private var cloudKeyError: String?
 
     var body: some View {
         NavigationStack {
@@ -23,6 +28,7 @@ struct SettingsView: View {
                 prioritySection
                 if !model.suggestions.isEmpty { suggestionsSection }
                 draftingSection
+                cloudDraftsSection
                 notificationsSection
                 calendarSection
                 privacySection
@@ -36,6 +42,50 @@ struct SettingsView: View {
     }
 
     // MARK: Sections
+
+    private var cloudDraftsSection: some View {
+        Section {
+            Picker("Cloud drafts", selection: $cloudModeRaw) {
+                ForEach(CloudDrafts.Mode.allCases) { Text($0.title).tag($0.rawValue) }
+            }
+            if cloudModeRaw != CloudDrafts.Mode.off.rawValue {
+                if cloudHasKey {
+                    Label("Your Anthropic key is saved on this phone", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(Theme.good)
+                    Button("Remove key", role: .destructive) {
+                        CloudDrafts.removeKey()
+                        cloudHasKey = false
+                    }
+                } else {
+                    HStack(spacing: 10) {
+                        SecureField("Anthropic API key (sk-ant-...)", text: $cloudKeyInput)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        PasteButton(payloadType: String.self) { strings in
+                            if let first = strings.first { cloudKeyInput = first.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        }
+                        .labelStyle(.titleOnly).buttonBorderShape(.capsule).tint(Theme.accent)
+                    }
+                    Button("Save key") {
+                        do { try CloudDrafts.saveKey(cloudKeyInput); cloudKeyInput = ""; cloudHasKey = true; cloudKeyError = nil }
+                        catch { cloudKeyError = "Couldn't save the key. Try again." }
+                    }
+                    .disabled(cloudKeyInput.trimmingCharacters(in: .whitespaces).count < 20)
+                    if let cloudKeyError { Text(cloudKeyError).font(.footnote).foregroundStyle(Theme.warn) }
+                    Link("Get a key at console.anthropic.com", destination: URL(string: "https://console.anthropic.com/settings/keys")!)
+                        .font(.footnote)
+                }
+                Picker("Model", selection: $cloudModelRaw) {
+                    ForEach(CloudModel.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
+                }
+                Text((CloudModel(rawValue: cloudModelRaw) ?? .opus).costHint)
+                    .font(.footnote).foregroundStyle(Theme.muted)
+            }
+        } header: {
+            Text("Better drafts on any phone (optional)")
+        } footer: {
+            Text("Off by default. When on, tapping Draft a reply sends only that one email, plus a short summary of how you write, to Anthropic (the company behind Claude) over a secure connection to write the draft. Nothing is sent until you tap, and nothing is ever sent as an email without you tapping Send. You pay Anthropic directly for what you use. Your key stays in this phone's Keychain.")
+        }
+    }
 
     private var prioritySection: some View {
         Section {

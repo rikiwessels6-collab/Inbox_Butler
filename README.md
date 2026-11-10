@@ -165,11 +165,12 @@ without your tap, and a dismissed or added event never comes back.
 | Calendar events you add | **No** | Written to your on-device calendar. Existing events are read only to show overlaps and are never stored or sent. |
 | Local mail cache, style profile, widget snapshot | **No** | App sandbox / App Group container on the device. |
 | Style profile (learned from sent mail) | **No** | Computed on-device and stored locally. |
-| Summaries, importance, date extraction, drafting | **Depends on the AI choice (undecided)** | Option A, Apple Foundation Models: nothing leaves the device. Option B, backend proxy: the text sent for each request leaves the device and goes to your proxy and then the model provider. Not implemented until you choose. |
+| Drafting replies | **No by default. Yes only if you turn on Cloud drafts** | Default: Apple Intelligence on the phone, or a built-in template, so nothing leaves the device. If you switch on Cloud drafts in Settings and add your own Anthropic API key, tapping "Draft a reply" sends that one email, plus a short summary of your writing style, to Anthropic's API over HTTPS. Your key is stored in the iOS Keychain, not in the app. Nothing is sent until you tap, and drafts are never sent as email without you tapping Send. |
+| Summaries, importance, date extraction | **No** | Done on the device by simple rules. |
 | Notification text (sender, subject) | **No** | Local notifications built on the device. On a locked device iOS may show or hide previews per your Notification settings. |
 | Analytics / telemetry | **None** | There is none. |
 
-No API key is ever embedded in the app.
+No API key is ever embedded in the app. (If you choose Cloud drafts, your own key is kept only in your phone's Keychain.)
 
 ## Safety rules the code enforces
 

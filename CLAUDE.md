@@ -28,7 +28,7 @@ Inbox Butler: a SwiftUI iOS 17+ app (Boundary Line Apps) that merges Gmail, iClo
 - **Done and Remind-me are app-only** (`TriageStore`); they never touch the real mailbox.
 - Drafts are never auto-sent; replies go through `MFMailComposeViewController` and the user taps Send.
 - Calendar events are proposals confirmed by the user; overlaps are informational and must never block an add.
-- No API keys in the app; tokens/passwords only in Keychain. Process on-device; no analytics. Update the README "What leaves the device" table if that changes.
+- No API keys built into the app; tokens/passwords only in Keychain. Process on-device by default; no analytics. The one exception is opt-in Cloud drafts (`CloudAIService`, off by default): it sends one email to Anthropic using the user's OWN key from their Keychain, only when they tap Draft a reply. Update the README "What leaves the device" table if that changes.
 - Email text is untrusted input to the on-device model (see `DraftPrompt`).
 
 ## Gotchas

@@ -71,3 +71,57 @@ final class DraftTests: XCTestCase {
         XCTAssertTrue(store.all().isEmpty)
     }
 }
+
+final class CloudAIServiceTests: XCTestCase {
+    private struct Canned: HTTPTransport {
+        let handler: @Sendable (URLRequest) -> (Int, String)
+        func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+            let (status, body) = handler(request)
+            let r = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
+            return (Data(body.utf8), r)
+        }
+    }
+
+    private let msg = MailMessage(accountID: UUID(), providerMessageID: "c", from: MailAddress(name: "Talia", address: "t@s.edu"),
+                                  subject: "Activities Week", snippet: "", receivedAt: Date())
+
+    func testRequestShape() throws {
+        let prompt = DraftPrompt.make(message: msg, body: "Hello", style: nil)
+        let req = CloudAIService.makeRequest(apiKey: "sk-test", model: .opus, prompt: prompt, withFallback: true)
+        XCTAssertEqual(req.url?.absoluteString, "https://api.anthropic.com/v1/messages")
+        XCTAssertEqual(req.value(forHTTPHeaderField: "x-api-key"), "sk-test")
+        XCTAssertEqual(req.value(forHTTPHeaderField: "anthropic-version"), "2023-06-01")
+        XCTAssertEqual(req.value(forHTTPHeaderField: "anthropic-beta"), "server-side-fallback-2026-07-01")
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(req.httpBody)) as? [String: Any])
+        XCTAssertEqual(body["model"] as? String, "claude-opus-5-5")
+        XCTAssertEqual(body["fallbacks"] as? String, "default")
+        XCTAssertNil(body["temperature"])
+        let plain = CloudAIService.makeRequest(apiKey: "k", model: .haiku, prompt: prompt, withFallback: false)
+        XCTAssertNil(plain.value(forHTTPHeaderField: "anthropic-beta"))
+    }
+
+    func testDraftComesBackAsCloudSource() async throws {
+        let service = CloudAIService(apiKey: "k", model: .sonnet, transport: Canned { _ in
+            (200, #"{"content":[{"type":"text","text":"Hi Talia,\n\nThanks for the schedule."}],"stop_reason":"end_turn"}"#)
+        })
+        let draft = try await service.draftReply(to: msg, body: "Schedule attached", style: nil)
+        XCTAssertEqual(draft.source, "cloud")
+        XCTAssertTrue(draft.body.contains("Thanks for the schedule"))
+    }
+
+    func testRetriesWithoutFallbackOn400() async throws {
+        let service = CloudAIService(apiKey: "k", model: .opus, transport: Canned { req in
+            req.value(forHTTPHeaderField: "anthropic-beta") != nil
+                ? (400, #"{"error":{"message":"bad"}}"#)
+                : (200, #"{"content":[{"type":"text","text":"OK reply"}]}"#)
+        })
+        let draft = try await service.draftReply(to: msg, body: "x", style: nil)
+        XCTAssertEqual(draft.body, "OK reply")
+    }
+
+    func testFriendlyErrors() {
+        XCTAssertThrowsError(try CloudAIService.parseReply(data: Data("{}".utf8), status: 401))
+        XCTAssertThrowsError(try CloudAIService.parseReply(data: Data(#"{"stop_reason":"refusal","content":[]}"#.utf8), status: 200))
+        XCTAssertThrowsError(try CloudAIService.parseReply(data: Data(#"{"content":[]}"#.utf8), status: 200))
+    }
+}

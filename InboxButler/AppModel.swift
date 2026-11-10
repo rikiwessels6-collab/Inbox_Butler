@@ -45,6 +45,8 @@ final class AppModel {
     /// Reply drafts by message id. Written on this device; never sent automatically.
     private(set) var drafts: [String: ReplyDraft] = [:]
     private(set) var isDraftingIDs: Set<String> = []
+    /// Why a draft fell back to a simpler one (e.g. the cloud key was rejected), by message id.
+    private(set) var draftNotes: [String: String] = [:]
     /// App-only Done / Remind-me state by message id. NEVER changes the real mailbox.
     private(set) var triage: [String: TriageState] = [:]
     /// Updated every 30 seconds so reminders reappear on time.
@@ -537,13 +539,23 @@ final class AppModel {
         let source = text ?? message.snippet
         var style = styleStore.load() ?? StyleProfile()
         style.aboutUser = writerProfile.summary
-        let draft: ReplyDraft
-        do {
-            draft = try await ai.draftReply(to: message, body: source, style: style)
-        } catch {
-            guard let fallback = try? await TemplateDraftService().draftReply(to: message, body: source, style: style) else { return nil }
-            draft = fallback
+        // Cloud drafting only runs if the person switched it on and added their own key; the email
+        // being replied to is then sent to Anthropic. Otherwise this stays on the phone.
+        var services: [any AIService] = []
+        if let cloud = CloudDrafts.service(onDeviceAvailable: DraftAI.onDeviceAvailable) { services.append(cloud) }
+        services.append(ai)
+        draftNotes[message.id] = nil
+        var made: ReplyDraft?
+        for service in services {
+            do {
+                made = try await service.draftReply(to: message, body: source, style: style)
+                break
+            } catch {
+                if service.processingLocation == .cloud { draftNotes[message.id] = error.localizedDescription }
+            }
         }
+        if made == nil { made = try? await TemplateDraftService().draftReply(to: message, body: source, style: style) }
+        guard let draft = made else { return nil }
         drafts[message.id] = draft
         if !usingDemoData { draftStore.save(draft) }
         return draft
