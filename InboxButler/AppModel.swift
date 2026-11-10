@@ -469,6 +469,23 @@ final class AppModel {
         return try await provider.fetchAttachment(attachment, in: message)
     }
 
+    /// Prepares an answer to a calendar invite: the person to reply to, the reply text and, when the
+    /// invite has a calendar file, a matching calendar reply so the organiser's calendar updates too.
+    /// Nothing is sent: the person still reviews it and taps Send in the system mail sheet.
+    func prepareRSVP(_ message: MailMessage, _ answer: RSVPReply.Answer) async -> RSVPReply {
+        let myAddress = account(for: message.accountID)?.emailAddress ?? ""
+        var to = message.from.address
+        var ics: Data?
+        if let invite = message.attachments.first(where: { $0.kind == .calendar }),
+           let data = try? await attachmentData(invite, in: message),
+           let reply = ICSReplyBuilder.make(from: String(decoding: data, as: UTF8.self), answer: answer.rsvp,
+                                            attendee: myAddress, attendeeName: nil) {
+            ics = Data(reply.ics.utf8)
+            if let organizer = reply.organizer, organizer.contains("@") { to = organizer }
+        }
+        return RSVPReply(message: message, answer: answer, to: to, ics: ics)
+    }
+
     /// The message's original HTML (nil if it has none), for the formatted view.
     func htmlBody(for message: MailMessage) async throws -> String? {
         guard let provider = providerByAccount[message.accountID] else { return nil }

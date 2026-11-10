@@ -125,7 +125,7 @@ struct UnifiedInboxView: View {
                            isPriority: model.isPriority(message),
                            showRecipient: filter == .waiting,
                        reminderBack: model.hasResurfaced(message),
-                       onRSVP: { answer in rsvp = RSVPReply(message: message, answer: answer) })
+                       onRSVP: { answer in Task { rsvp = await model.prepareRSVP(message, answer) } })
                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                     .listRowSeparatorTint(Theme.hairline)
                     .listRowBackground(Color.clear)
@@ -182,8 +182,10 @@ struct UnifiedInboxView: View {
             MailComposer(to: [], subject: "", body: "", preferredFrom: nil) { _ in composeNew = false }.ignoresSafeArea()
         }
         .sheet(item: $rsvp) { reply in
-            MailComposer(to: [reply.message.from.address], subject: ReplyFormatter.subject(reply.message.subject),
-                         body: reply.text, preferredFrom: model.account(for: reply.message.accountID)?.emailAddress) { _ in rsvp = nil }
+            MailComposer(to: [reply.to.isEmpty ? reply.message.from.address : reply.to],
+                         subject: ReplyFormatter.subject(reply.message.subject),
+                         body: reply.text, preferredFrom: model.account(for: reply.message.accountID)?.emailAddress,
+                         attachment: reply.ics.map { ($0, "text/calendar", "reply.ics") }) { _ in rsvp = nil }
                 .ignoresSafeArea()
         }
         .alert("Mail isn't set up on this device", isPresented: $noMailAlert) {
@@ -530,10 +532,17 @@ struct UnifiedInboxView: View {
 /// A tap on YES / MAYBE / NO in an invite row. Opens the system mail sheet with the answer filled
 /// in; nothing is sent until the person taps Send there.
 struct RSVPReply: Identifiable {
-    enum Answer: String { case yes = "YES", maybe = "MAYBE", no = "NO" }
+    enum Answer: String {
+        case yes = "YES", maybe = "MAYBE", no = "NO"
+        var rsvp: RSVPAnswer { self == .yes ? .accept : (self == .maybe ? .tentative : .decline) }
+    }
     let id = UUID()
     let message: MailMessage
     let answer: Answer
+    /// Who the reply goes to: the invite's organiser when known, otherwise the sender.
+    var to: String = ""
+    /// A matching calendar reply (attached so the organiser's calendar updates), if the invite had one.
+    var ics: Data? = nil
 
     var text: String {
         let first = ReplyFormatter.firstName(message.from.display)

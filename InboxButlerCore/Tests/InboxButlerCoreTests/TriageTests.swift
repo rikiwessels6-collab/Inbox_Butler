@@ -279,3 +279,39 @@ final class InboxSplitTests: XCTestCase {
         XCTAssertEqual(store.load(), [split])
     }
 }
+
+final class ICSReplyTests: XCTestCase {
+    private let invite = """
+    BEGIN:VCALENDAR
+    METHOD:REQUEST
+    BEGIN:VEVENT
+    UID:abc-123@cricket.com.au
+    SEQUENCE:2
+    DTSTART;TZID=Australia/Melbourne:20261120T100000
+    DTEND;TZID=Australia/Melbourne:20261120T110000
+    SUMMARY:WBBL|12 In Series meeting #1
+    ORGANIZER;CN=Ian Lock:mailto:ian.lock@cricket.com.au
+    END:VEVENT
+    END:VCALENDAR
+    """.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: "\r\n")
+
+    func testBuildsAReplyThatMatchesTheInvite() throws {
+        let reply = try XCTUnwrap(ICSReplyBuilder.make(from: invite, answer: .tentative, attendee: "me@x.io", attendeeName: "Riki"))
+        XCTAssertTrue(reply.ics.contains("METHOD:REPLY"))
+        XCTAssertTrue(reply.ics.contains("UID:abc-123@cricket.com.au"))
+        XCTAssertTrue(reply.ics.contains("SEQUENCE:2"))
+        XCTAssertTrue(reply.ics.contains("DTSTART;TZID=Australia/Melbourne:20261120T100000"))
+        XCTAssertTrue(reply.ics.contains("ATTENDEE;PARTSTAT=TENTATIVE;CN=\"Riki\":mailto:me@x.io"))
+        XCTAssertEqual(reply.organizer, "ian.lock@cricket.com.au")
+        XCTAssertEqual(reply.summary, "WBBL|12 In Series meeting #1")
+    }
+
+    func testAnswersMapToStandardWords() {
+        XCTAssertEqual(RSVPAnswer.accept.partStat, "ACCEPTED")
+        XCTAssertEqual(RSVPAnswer.decline.partStat, "DECLINED")
+    }
+
+    func testNoReplyWithoutAnEvent() {
+        XCTAssertNil(ICSReplyBuilder.make(from: "BEGIN:VCALENDAR\r\nEND:VCALENDAR", answer: .accept, attendee: "me@x.io"))
+    }
+}

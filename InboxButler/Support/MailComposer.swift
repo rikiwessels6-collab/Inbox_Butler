@@ -8,6 +8,8 @@ struct MailComposer: UIViewControllerRepresentable {
     let subject: String
     let body: String
     let preferredFrom: String?
+    /// An optional attachment, e.g. the calendar reply for an invite.
+    var attachment: (data: Data, mimeType: String, fileName: String)? = nil
     let onFinish: (MFMailComposeResult) -> Void
 
     static var canSend: Bool { MFMailComposeViewController.canSendMail() }
@@ -21,6 +23,7 @@ struct MailComposer: UIViewControllerRepresentable {
         vc.setSubject(subject)
         vc.setMessageBody(body, isHTML: false)
         if let preferredFrom { vc.setPreferredSendingEmailAddress(preferredFrom) }
+        if let attachment { vc.addAttachmentData(attachment.data, mimeType: attachment.mimeType, fileName: attachment.fileName) }
         return vc
     }
 
