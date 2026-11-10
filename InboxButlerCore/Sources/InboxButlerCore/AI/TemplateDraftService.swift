@@ -1,7 +1,8 @@
 import Foundation
 
-/// Fallback used when on-device AI isn't available: a simple, honest holding reply in the
-/// user's greeting and sign-off. They edit it before anything is sent.
+/// Fallback used when on-device AI isn't available: a reply built from what the email actually
+/// says (its question, request, deadline and dates), in the user's greeting and sign-off.
+/// They edit it before anything is sent.
 public struct TemplateDraftService: AIService {
     public init() {}
     public var processingLocation: AIProcessingLocation { .onDevice }
@@ -10,18 +11,8 @@ public struct TemplateDraftService: AIService {
         let name = ReplyFormatter.firstName(message.from.display)
         let greeting = style?.greetings.first.map { $0.replacingOccurrences(of: "{name}", with: name) } ?? "Hi \(name),"
         let signOff = style?.signOffs.first ?? "Thanks,"
-        let lower = (message.subject + " " + body).lowercased()
-        let asksSomething = body.contains("?")
-        let core: String
-        if (lower.contains("attached") || !message.attachments.isEmpty) && !asksSomething {
-            core = "Thanks for sending this through. I've received it and will go over it shortly."
-        } else if lower.contains("meeting") || lower.contains("catch up") || lower.contains("appointment") {
-            core = "Thanks for getting in touch. Let me check my calendar and confirm a time shortly."
-        } else if asksSomething {
-            core = "Thanks for your email. Let me look into this and come back to you shortly with an answer."
-        } else {
-            core = "Thanks for letting me know. I'll take a look and be in touch if I need anything."
-        }
+        let facts = ContentAwareDraft.facts(subject: message.subject, body: body, hasAttachment: !message.attachments.isEmpty)
+        let core = ContentAwareDraft.reply(facts: facts)
         let text = "\(greeting)\n\n\(core)\n\n\(signOff)"
         return ReplyDraft(inReplyToMessageID: message.id, body: text, source: "basic")
     }

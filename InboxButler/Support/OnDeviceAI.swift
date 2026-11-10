@@ -14,6 +14,28 @@ enum DraftAI {
         return TemplateDraftService()
     }
 
+    /// Why the on-device model isn't being used, in plain words. nil when it is available.
+    static var unavailableReason: String? {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            switch SystemLanguageModel.default.availability {
+            case .available:
+                return nil
+            case .unavailable(let reason):
+                switch reason {
+                case .deviceNotEligible: return "This iPhone doesn't support Apple Intelligence."
+                case .appleIntelligenceNotEnabled: return "Apple Intelligence is turned off. Turn it on in Settings > Apple Intelligence & Siri."
+                case .modelNotReady: return "Apple Intelligence is still getting ready. Try again in a few minutes."
+                @unknown default: return "Apple Intelligence isn't available right now."
+                }
+            @unknown default:
+                return "Apple Intelligence isn't available right now."
+            }
+        }
+        #endif
+        return "Needs iOS 26 or later for Apple Intelligence."
+    }
+
     /// Why drafts are "basic" (shown in Settings).
     static var statusText: String {
         #if canImport(FoundationModels)

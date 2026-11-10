@@ -212,8 +212,38 @@ final class BroadcastAndInlineTests: XCTestCase {
         let m = MailMessage(accountID: UUID(), providerMessageID: "4", from: MailAddress(name: "Talia", address: "t@s.edu"),
                             subject: "Schedule", snippet: "", receivedAt: Date())
         let fyi = try await TemplateDraftService().draftReply(to: m, body: "The schedule is attached.", style: nil)
-        XCTAssertTrue(fyi.body.contains("received it"))
+        XCTAssertTrue(fyi.body.contains("Schedule"))
         let q = try await TemplateDraftService().draftReply(to: m, body: "Can you confirm?", style: nil)
-        XCTAssertTrue(q.body.contains("answer"))
+        XCTAssertTrue(q.body.contains("[add your answer here]"))
+    }
+}
+
+final class ContentAwareDraftTests: XCTestCase {
+    private func msg(_ subject: String) -> MailMessage {
+        MailMessage(accountID: UUID(), providerMessageID: "d", from: MailAddress(name: "Talia Di Pino", address: "t@s.edu"),
+                    subject: subject, snippet: "", receivedAt: Date())
+    }
+
+    func testScheduleEmailMentionsTopicAndDates() async throws {
+        let body = "Good afternoon Year 7 students and parents, Attached is the year level schedule for Activities Week from Friday Week 8 to the end of Week 9."
+        let d = try await TemplateDraftService().draftReply(to: msg("Year 7 - Activities Week"), body: body, style: nil)
+        XCTAssertTrue(d.body.contains("Year 7 - Activities Week"))
+        XCTAssertTrue(d.body.contains("Friday Week 8"))
+        XCTAssertEqual(d.source, "basic")
+    }
+
+    func testRequestWithDeadline() async throws {
+        let body = "Hi Sam. Please return the signed permission form by Friday. Thanks."
+        let f = ContentAwareDraft.facts(subject: "Re: Excursion form", body: body, hasAttachment: false)
+        XCTAssertEqual(f.topic, "Excursion form")
+        XCTAssertEqual(f.deadline, "Friday")
+        XCTAssertTrue(ContentAwareDraft.reply(facts: f).contains("by Friday"))
+    }
+
+    func testQuestionGetsPlaceholderNotInventedAnswer() {
+        let f = ContentAwareDraft.facts(subject: "Dinner", body: "Are you free on Saturday evening for dinner?", hasAttachment: false)
+        let reply = ContentAwareDraft.reply(facts: f)
+        XCTAssertTrue(reply.contains("Are you free on Saturday evening for dinner"))
+        XCTAssertTrue(reply.contains("[add your answer here]"))
     }
 }

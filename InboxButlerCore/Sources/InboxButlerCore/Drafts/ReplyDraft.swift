@@ -11,7 +11,7 @@ public struct ReplyDraft: Identifiable, Hashable, Codable, Sendable {
     public var body: String
     public var status: Status
     public var createdAt: Date
-    /// "on-device" (Apple Intelligence) or "basic" (template). Shown to the user.
+    /// "on-device" (Apple Intelligence) or "basic" (template, built from what the email says). Shown to the user.
     public var source: String
 
     public init(id: UUID = UUID(), inReplyToMessageID: String, body: String,

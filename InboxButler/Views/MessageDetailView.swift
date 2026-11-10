@@ -180,10 +180,14 @@ struct MessageDetailView: View {
                 SectionLabel(text: "Reply")
                 Spacer()
                 if let draft {
-                    PillLabel(text: draft.source == "on-device" ? "Written on this device" : "Basic draft",
+                    PillLabel(text: draft.source == "on-device" ? "Written on this device" : "Quick draft",
                               systemImage: draft.source == "on-device" ? "sparkles" : "text.alignleft",
                               tint: draft.source == "on-device" ? Theme.accent : Theme.muted)
                 }
+            }
+            if let draft, draft.source != "on-device" {
+                Text((DraftAI.unavailableReason ?? "The on-device model couldn't write this one.") + " This quick draft is built from what the email says, so check it and fill in anything in [brackets].")
+                    .font(.footnote).foregroundStyle(Theme.muted)
             }
             if drafting {
                 HStack(spacing: 10) {
