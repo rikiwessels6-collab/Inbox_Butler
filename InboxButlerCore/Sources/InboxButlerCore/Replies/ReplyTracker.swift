@@ -34,6 +34,7 @@ public enum ReplyTracker {
         var awaitingMine = Set<String>()
         for (k, m) in latestInbox {
             guard !m.isBulk, !BulkMailDetector.isAutomatedAddress(m.from.address),
+                  !BulkMailDetector.isBroadcast(fromAddress: m.from.address, snippet: m.snippet),
                   now.timeIntervalSince(m.receivedAt) <= Double(needsReplyWindowDays) * 86_400 else { continue }
             if let mine = latestSent[k], mine.receivedAt >= m.receivedAt { continue }   // already answered
             awaitingMine.insert(m.id)

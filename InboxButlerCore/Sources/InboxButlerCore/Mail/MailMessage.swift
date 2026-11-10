@@ -29,6 +29,14 @@ public struct AttachmentInfo: Identifiable, Hashable, Codable, Sendable {
         self.byteCount = byteCount
         self.kind = kind
     }
+
+    /// Tiny inline pictures (logos, signatures, "image.png") that are part of the layout, not
+    /// something the sender meant you to open. Hidden from attachment lists.
+    public var isLikelyInline: Bool {
+        guard kind == .image, byteCount < 30_000 else { return false }
+        let name = filename.lowercased()
+        return name.isEmpty || ["image", "img", "logo", "outlook-", "ii_", "unnamed", "signature", "spacer"].contains { name.hasPrefix($0) }
+    }
 }
 
 /// Provider-independent message used by the whole app.
@@ -67,7 +75,7 @@ public struct MailMessage: Identifiable, Hashable, Codable, Sendable {
         self.snippet = snippet
         self.receivedAt = receivedAt
         self.isRead = isRead
-        self.attachments = attachments
+        self.attachments = attachments.filter { !$0.isLikelyInline }
         self.importance = importance
         self.awaitingReply = awaitingReply
         self.isBulk = isBulk

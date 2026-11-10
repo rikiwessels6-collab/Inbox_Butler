@@ -141,6 +141,7 @@ struct MessageDetailView: View {
     private var messageBody: some View {
         Divider().overlay(Theme.hairline)
         if let analysis {
+            if analysis.isPartial { partialBanner }
             Text(String(analysis.body.prefix(4000)))
                 .font(.body)
                 .lineSpacing(5)
@@ -152,6 +153,21 @@ struct MessageDetailView: View {
                 if isLoading { ProgressView() }
             }
         }
+    }
+
+    /// Shown when only the short preview loaded, instead of silently pretending it is the whole email.
+    private var partialBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.circle").foregroundStyle(Theme.warn)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Only a short preview loaded").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Open the full email to read all of it.").font(.footnote).foregroundStyle(Theme.muted)
+            }
+            Spacer(minLength: 0)
+            Button("Open") { Task { await showFormatted() } }
+                .buttonStyle(SecondaryButtonStyle())
+        }
+        .card(padding: 12)
     }
 
     // MARK: Reply

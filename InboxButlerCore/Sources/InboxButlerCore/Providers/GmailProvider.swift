@@ -71,6 +71,16 @@ public struct GmailProvider: MailProvider {
         }
         if let plain = Self.firstBody(in: raw.payload, mime: "text/plain") { return plain }
         if let html = Self.firstBody(in: raw.payload, mime: "text/html") { return HTMLText.strip(html) }
+        // Large text parts come back as attachments, not inline data.
+        for mime in ["text/plain", "text/html"] {
+            guard let id = Self.textAttachmentID(in: raw.payload, mime: mime) else { continue }
+            let (d, s) = try await get("messages/\(message.providerMessageID)/attachments/\(id)")
+            if s == 200, let part = try? JSONDecoder().decode(AttachmentBody.self, from: d),
+               let bytes = Self.decodeBase64URL(part.data) {
+                let text = String(decoding: bytes, as: UTF8.self)
+                return mime == "text/html" ? HTMLText.strip(text) : text
+            }
+        }
         return message.snippet
     }
 
@@ -103,9 +113,17 @@ public struct GmailProvider: MailProvider {
         "parts(filename,mimeType,body(attachmentId,size))))"
 
     /// Body text only (up to 4 levels of nesting), no headers or attachment metadata.
-    private static let bodyFields =
-        "payload(mimeType,body(data),parts(mimeType,body(data),parts(mimeType,body(data)," +
-        "parts(mimeType,body(data),parts(mimeType,body(data))))))"
+    /// Whole MIME tree (any depth), so deeply nested messages from Outlook and school systems
+    /// still yield their text. Attachment bytes are never inline, so this stays small.
+    private static let bodyFields = "payload(mimeType,body(data,attachmentId),parts)"
+
+    /// Id of a text part whose content is too big to be inline (Gmail serves it as an attachment).
+    static func textAttachmentID(in part: RawMessage.Part?, mime: String) -> String? {
+        guard let part else { return nil }
+        if part.mimeType?.lowercased() == mime, part.body?.data == nil, let id = part.body?.attachmentId { return id }
+        for child in part.parts ?? [] { if let found = textAttachmentID(in: child, mime: mime) { return found } }
+        return nil
+    }
 
     /// First part of the given MIME type that has inline data, decoded as UTF-8.
     static func firstBody(in part: RawMessage.Part?, mime: String) -> String? {

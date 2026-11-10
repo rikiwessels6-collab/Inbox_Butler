@@ -182,3 +182,38 @@ final class TodayBriefTests: XCTestCase {
         XCTAssertTrue(TodayBrief.make(messages: [], events: [], suggestions: [], now: at(12), calendar: cal).isEmpty)
     }
 }
+
+final class BroadcastAndInlineTests: XCTestCase {
+    func testRoleMailboxesAndSchoolNoticesAreBroadcast() {
+        XCTAssertTrue(BulkMailDetector.isBroadcast(fromAddress: "service@paypal.co.uk", snippet: "Your statement is ready."))
+        XCTAssertTrue(BulkMailDetector.isBroadcast(fromAddress: "talia@school.edu.au", snippet: "Good afternoon Year 7 students and parents, Attached is"))
+        XCTAssertFalse(BulkMailDetector.isBroadcast(fromAddress: "sam@x.io", snippet: "Can you send me the form by Friday?"))
+    }
+
+    func testBroadcastNeverNeedsAReply() {
+        let me = "me@x.io"
+        let notice = MailMessage(accountID: UUID(), providerMessageID: "1", from: MailAddress(name: "School", address: "office@school.edu.au"),
+                                 subject: "Disco", snippet: "Dear families, the disco is tomorrow.", receivedAt: Date())
+        let person = MailMessage(accountID: UUID(), providerMessageID: "2", from: MailAddress(name: "Sam", address: "sam@x.io"),
+                                 subject: "Quick one", snippet: "Can you call me?", receivedAt: Date())
+        let status = ReplyTracker.analyze(inbox: [notice, person], sent: [], myAddresses: [me])
+        XCTAssertEqual(status.awaitingMyReply, [person.id])
+    }
+
+    func testInlineImagesAreHidden() {
+        let logo = AttachmentInfo(id: "a", filename: "image.png", mimeType: "image/png", byteCount: 623, kind: .image)
+        let photo = AttachmentInfo(id: "b", filename: "holiday.jpg", mimeType: "image/jpeg", byteCount: 400_000, kind: .image)
+        let m = MailMessage(accountID: UUID(), providerMessageID: "3", from: MailAddress(address: "a@b.c"), subject: "s",
+                            snippet: "", receivedAt: Date(), attachments: [logo, photo])
+        XCTAssertEqual(m.attachments.map(\.filename), ["holiday.jpg"])
+    }
+
+    func testDraftVariants() async throws {
+        let m = MailMessage(accountID: UUID(), providerMessageID: "4", from: MailAddress(name: "Talia", address: "t@s.edu"),
+                            subject: "Schedule", snippet: "", receivedAt: Date())
+        let fyi = try await TemplateDraftService().draftReply(to: m, body: "The schedule is attached.", style: nil)
+        XCTAssertTrue(fyi.body.contains("received it"))
+        let q = try await TemplateDraftService().draftReply(to: m, body: "Can you confirm?", style: nil)
+        XCTAssertTrue(q.body.contains("answer"))
+    }
+}

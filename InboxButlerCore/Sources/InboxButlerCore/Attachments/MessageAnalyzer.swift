@@ -5,6 +5,8 @@ public struct MessageAnalysis: Sendable {
     public var proposals: [EventProposal]
     /// Human-readable problems, e.g. "scan.pdf is too large to scan."
     public var notes: [String]
+    /// True when only the short preview could be loaded, not the full message text.
+    public var isPartial: Bool = false
 }
 
 /// Reads a message's text and attachments ON-DEVICE and proposes events.
@@ -22,9 +24,12 @@ public struct MessageAnalyzer: Sendable {
                         referenceDate: Date = Date()) async -> MessageAnalysis {
         var notes: [String] = []
         var body: String
+        var partial = false
         do {
             body = try await provider.fetchBody(for: message)
+            partial = body == message.snippet
         } catch {
+            partial = true
             body = message.snippet
             notes.append("Couldn't load the full message: \(error.localizedDescription)")
         }
@@ -60,6 +65,6 @@ public struct MessageAnalyzer: Sendable {
             .sorted { ($0.source == .calendarFile ? 0 : 1) < ($1.source == .calendarFile ? 0 : 1) }
             .filter { seen.insert($0.fingerprint).inserted }
             .sorted { $0.start < $1.start }
-        return MessageAnalysis(body: body, proposals: unique, notes: notes)
+        return MessageAnalysis(body: body, proposals: unique, notes: notes, isPartial: partial)
     }
 }

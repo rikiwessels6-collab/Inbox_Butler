@@ -20,4 +20,26 @@ public enum BulkMailDetector {
         if let p = precedence?.lowercased(), ["bulk", "list", "junk"].contains(p) { return true }
         return isAutomatedAddress(fromAddress)
     }
+
+    private static let roleMailboxes = [
+        "service", "services", "info", "support", "billing", "statements", "statement", "accounts", "account",
+        "alerts", "alert", "orders", "order", "hello", "team", "admin", "office", "enquiries", "contact", "news", "updates"
+    ]
+
+    private static let broadcastGreetings = [
+        "parents and carers", "students and parents", "parents and students", "dear parents", "dear families",
+        "dear carers", "dear students", "dear all", "hi all", "hello all", "hi everyone", "hello everyone",
+        "dear community", "dear colleagues", "to all staff", "good afternoon parents", "good morning parents",
+        "good afternoon year", "good morning year"
+    ]
+
+    /// Mail sent to many people at once, or from a shared mailbox like service@ or info@. Nothing
+    /// personal is being asked of you, so it should never count as "needs a reply".
+    public static func isBroadcast(fromAddress: String, snippet: String) -> Bool {
+        let address = fromAddress.lowercased()
+        let local = address.split(separator: "@").first.map(String.init) ?? address
+        if roleMailboxes.contains(local) { return true }
+        let opening = String(snippet.lowercased().prefix(80))
+        return broadcastGreetings.contains { opening.contains($0) }
+    }
 }

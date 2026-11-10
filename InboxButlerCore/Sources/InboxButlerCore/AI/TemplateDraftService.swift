@@ -10,7 +10,19 @@ public struct TemplateDraftService: AIService {
         let name = ReplyFormatter.firstName(message.from.display)
         let greeting = style?.greetings.first.map { $0.replacingOccurrences(of: "{name}", with: name) } ?? "Hi \(name),"
         let signOff = style?.signOffs.first ?? "Thanks,"
-        let text = "\(greeting)\n\nThanks for your email. I'll look into this and get back to you shortly.\n\n\(signOff)"
+        let lower = (message.subject + " " + body).lowercased()
+        let asksSomething = body.contains("?")
+        let core: String
+        if (lower.contains("attached") || !message.attachments.isEmpty) && !asksSomething {
+            core = "Thanks for sending this through. I've received it and will go over it shortly."
+        } else if lower.contains("meeting") || lower.contains("catch up") || lower.contains("appointment") {
+            core = "Thanks for getting in touch. Let me check my calendar and confirm a time shortly."
+        } else if asksSomething {
+            core = "Thanks for your email. Let me look into this and come back to you shortly with an answer."
+        } else {
+            core = "Thanks for letting me know. I'll take a look and be in touch if I need anything."
+        }
+        let text = "\(greeting)\n\n\(core)\n\n\(signOff)"
         return ReplyDraft(inReplyToMessageID: message.id, body: text, source: "basic")
     }
 
