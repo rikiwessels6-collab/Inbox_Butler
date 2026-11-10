@@ -4,6 +4,7 @@ import InboxButlerCore
 enum InboxFilter: Hashable {
     case all, priority, other, needsReply, newsletters, waiting, drafts, reminders, done
     case account(UUID)
+    case split(UUID)
 }
 
 /// Three columns on iPad (filters, mail list, message) that collapse to a normal
@@ -21,6 +22,7 @@ struct UnifiedInboxView: View {
     @State private var reminderTarget: MailMessage?
     @State private var todayEvents: [ExistingEvent] = []
     @State private var showMenu = false
+    @State private var showSplits = false
     @State private var showBrief = false
     @State private var confirmDoneAll = false
     @State private var composeNew = false
@@ -49,6 +51,14 @@ struct UnifiedInboxView: View {
                 row("Drafts ready", "square.and.pencil", .drafts, unreadCount(.drafts))
                 row("Waiting on others", "clock", .waiting, model.waitingOnOthers.count)
                 row("Newsletters", "newspaper", .newsletters, unreadCount(.newsletters))
+            }
+            Section {
+                ForEach(model.splits) { split in
+                    row(split.name, "line.3.horizontal.decrease.circle", .split(split.id), unreadCount(.split(split.id)))
+                }
+                Button { showSplits = true } label: { Label("Edit splits", systemImage: "slider.horizontal.3") }
+            } header: {
+                Text("Your splits")
             }
             Section {
                 row("Reminders", "bell", .reminders, model.snoozedMessages.count)
@@ -167,6 +177,7 @@ struct UnifiedInboxView: View {
         }
         .sheet(isPresented: $showMenu) { menuSheet }
         .sheet(isPresented: $showBrief) { briefSheet }
+        .sheet(isPresented: $showSplits) { SplitsView() }
         .sheet(isPresented: $composeNew) {
             MailComposer(to: [], subject: "", body: "", preferredFrom: nil) { _ in composeNew = false }.ignoresSafeArea()
         }
@@ -250,6 +261,7 @@ struct UnifiedInboxView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 24) {
                 splitItem("Inbox", .all)
+                ForEach(model.splits) { split in splitItem(split.name, .split(split.id)) }
                 splitItem("Important", .priority)
                 splitItem("Other", .other)
                 splitItem("Needs reply", .needsReply)
@@ -258,6 +270,12 @@ struct UnifiedInboxView: View {
                 splitItem("Newsletters", .newsletters)
                 splitItem("Reminders", .reminders)
                 splitItem("Done", .done)
+                Button { showSplits = true } label: {
+                    Image(systemName: "slider.horizontal.3").font(.system(size: 16)).foregroundStyle(Theme.muted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Edit splits")
+                .accessibilityIdentifier("edit-splits")
             }
             .padding(.horizontal, 24)
             .frame(height: 54)
@@ -430,6 +448,9 @@ struct UnifiedInboxView: View {
         case .reminders: return model.snoozedMessages.count
         case .done: return 0
         case .account(let id): return inbox.filter { !$0.isRead && $0.accountID == id }.count
+        case .split(let id):
+            guard let split = model.splits.first(where: { $0.id == id }) else { return 0 }
+            return inbox.filter { !$0.isRead && split.matches($0) }.count
         }
     }
 
@@ -445,6 +466,7 @@ struct UnifiedInboxView: View {
         case .reminders: return "Reminders"
         case .done: return "Done"
         case .account(let id): return model.account(for: id)?.label ?? "Account"
+        case .split(let id): return model.splits.first(where: { $0.id == id })?.name ?? "Split"
         }
     }
 
@@ -462,6 +484,9 @@ struct UnifiedInboxView: View {
         case .reminders: base = model.snoozedMessages
         case .done: base = model.doneMessages
         case .account(let id): base = inbox.filter { $0.accountID == id }
+        case .split(let id):
+            let split = model.splits.first(where: { $0.id == id })
+            base = inbox.filter { split?.matches($0) ?? false }
         }
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return base }

@@ -34,6 +34,8 @@ final class AppModel {
     static let shared = AppModel()
 
     private(set) var prioritySenders: [PrioritySender] = []
+    /// Inbox views the user defined (by their own labels or senders). Stored on this device only.
+    private(set) var splits: [InboxSplit] = []
     /// Recently sent mail (reply tracking, suggestions).
     private(set) var sent: [MailMessage] = []
     /// Mail you sent that nobody has answered yet.
@@ -71,6 +73,7 @@ final class AppModel {
 
     private let accountStore = AccountStore()
     private let senderStore = PrioritySenderStore()
+    private let splitStore = InboxSplitStore()
     private let notifiedStore = NotifiedStore()
     private let notifier = NotificationService()
     private let secrets = KeychainStore()
@@ -87,6 +90,7 @@ final class AppModel {
 
     private init() {
         prioritySenders = senderStore.load()
+        splits = splitStore.load()
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         cache = try? MessageCache()
         accounts = accountStore.load()
@@ -563,6 +567,21 @@ final class AppModel {
         guard !usingDemoData else { return }
         let candidates = inboxMessages.filter { $0.awaitingReply && isPriority($0) && drafts[$0.id] == nil && !isFromMe($0) }.prefix(3)
         for message in candidates { await generateDraft(for: message) }
+    }
+
+    // MARK: Splits (your own inbox views)
+
+    /// Your account labels seen on recent mail, most used first (offered when making a split).
+    var availableLabels: [LabelCount] { SplitSuggestions.labels(in: messages) }
+
+    func saveSplit(_ split: InboxSplit) {
+        if let i = splits.firstIndex(where: { $0.id == split.id }) { splits[i] = split } else { splits.append(split) }
+        try? splitStore.save(splits)
+    }
+
+    func deleteSplit(_ id: UUID) {
+        splits.removeAll { $0.id == id }
+        try? splitStore.save(splits)
     }
 
     // MARK: Priority senders

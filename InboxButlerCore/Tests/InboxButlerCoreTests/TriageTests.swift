@@ -247,3 +247,35 @@ final class ContentAwareDraftTests: XCTestCase {
         XCTAssertTrue(reply.contains("[add your answer here]"))
     }
 }
+
+final class InboxSplitTests: XCTestCase {
+    private func msg(from: String, labels: [String] = []) -> MailMessage {
+        MailMessage(accountID: UUID(), providerMessageID: UUID().uuidString, from: MailAddress(address: from),
+                    subject: "s", snippet: "", receivedAt: Date(), labels: labels.map { MailLabelTag(name: $0) })
+    }
+
+    func testMatchesByLabelAndSender() {
+        let split = InboxSplit(name: "Patto", labelNames: ["Cricket - Admin"], senderPatterns: ["@patto.com", "ian@x.io"])
+        XCTAssertTrue(split.matches(msg(from: "a@b.c", labels: ["cricket - admin"])))
+        XCTAssertTrue(split.matches(msg(from: "bob@patto.com")))
+        XCTAssertTrue(split.matches(msg(from: "IAN@x.io")))
+        XCTAssertFalse(split.matches(msg(from: "bob@other.com", labels: ["unrelated"])))
+        XCTAssertFalse(InboxSplit(name: "Empty").matches(msg(from: "a@b.c")))
+    }
+
+    func testLabelSuggestionsMostUsedFirst() {
+        let ms = [msg(from: "a@b.c", labels: ["A", "B"]), msg(from: "a@b.c", labels: ["B"]), msg(from: "a@b.c", labels: ["C"])]
+        let s = SplitSuggestions.labels(in: ms)
+        XCTAssertEqual(s.map(\.name), ["B", "A", "C"])
+        XCTAssertEqual(s.first?.count, 2)
+    }
+
+    func testStoreRoundTrip() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = InboxSplitStore(directory: dir)
+        XCTAssertTrue(store.load().isEmpty)
+        let split = InboxSplit(name: "Calendar", labelNames: ["05 - calendar & appointments"])
+        try store.save([split])
+        XCTAssertEqual(store.load(), [split])
+    }
+}
