@@ -248,7 +248,7 @@ struct MessageDetailView: View {
 
     private func startDraft(replacing: Bool) async {
         if replacing { model.discardDraft(for: message) }
-        await model.generateDraft(for: message, body: analysis?.body)
+        await model.generateDraft(for: message, body: analysis?.body, allowCloud: true)
         replyText = model.draft(for: message)?.body ?? ""
     }
 

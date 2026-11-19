@@ -34,6 +34,10 @@ struct TodayView: View {
         model.inboxMessages.filter { model.scanWarnings[$0.id] != nil }
     }
 
+    private var readyDrafts: [MailMessage] {
+        Array(model.inboxMessages.filter { model.draft(for: $0) != nil }.prefix(3))
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -42,6 +46,9 @@ struct TodayView: View {
                         .font(.title2.weight(.semibold))
                     Text(gmailStatus).font(.footnote).foregroundStyle(Theme.muted)
                     if model.isRefreshing { ProgressView("Checking mail") }
+                    if model.accounts.contains(where: { $0.kind == .gmail && model.errors[$0.id] != nil }) {
+                        Button("Open Gmail account settings") { router.tab = .accounts }
+                    }
                     if model.calendarAccess == .notDetermined && !model.usingDemoData {
                         Button("Show today’s calendar") { Task { await model.requestCalendarAccess() } }
                     }
@@ -49,6 +56,19 @@ struct TodayView: View {
                         Text("No items in your brief.").foregroundStyle(Theme.muted)
                     } else {
                         TodayCard(brief: brief, onOpen: openMessage)
+                    }
+                    if !readyDrafts.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Replies to review").font(.headline)
+                            ForEach(readyDrafts) { message in
+                                Button { selectedMessage = message } label: {
+                                    Label(message.subject, systemImage: "square.and.pencil")
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .card(padding: 16)
                     }
                     if !warnings.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {

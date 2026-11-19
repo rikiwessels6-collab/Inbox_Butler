@@ -74,6 +74,12 @@ struct AccountListView: View {
                         Spacer()
                         if !model.usingDemoData {
                             Menu {
+                                if account.kind == .gmail {
+                                    Button("Reconnect Gmail", systemImage: "arrow.trianglehead.clockwise.rotate.90") {
+                                        Task { await addGmail(reconnecting: account) }
+                                    }
+                                    .disabled(isSigningIn)
+                                }
                                 Button("Remove account", role: .destructive) { pendingRemoval = account }
                             } label: {
                                 Image(systemName: "ellipsis").foregroundStyle(Theme.muted).padding(8)
@@ -147,11 +153,12 @@ struct AccountListView: View {
             .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func addGmail() async {
+    private func addGmail(reconnecting account: MailAccount? = nil) async {
+        guard !isSigningIn else { return }
         isSigningIn = true
         defer { isSigningIn = false }
         do {
-            try await model.addGmailAccount()
+            try await model.addGmailAccount(reconnecting: account)
         } catch let error as SignInError {
             if case .failed(let text) = error { message = text }   // cancelled = silent
         } catch {

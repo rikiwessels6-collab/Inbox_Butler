@@ -13,12 +13,15 @@ struct UndoToast: Identifiable, Equatable {
 enum AddAccountError: LocalizedError {
     case googleNotConfigured
     case duplicate(String)
+    case wrongGmailAccount(expected: String, actual: String)
     var errorDescription: String? {
         switch self {
         case .googleNotConfigured:
             return "Google sign-in isn't set up yet. Add your client ID in AppConfig.swift (see docs/SETUP_GOOGLE.md)."
         case .duplicate(let email):
             return "\(email) is already connected."
+        case .wrongGmailAccount(let expected, let actual):
+            return "You selected \(actual). Sign in with \(expected) to reconnect this account."
         }
     }
 }
@@ -76,6 +79,8 @@ final class AppModel {
     private(set) var usingDemoData = false
 
     private var engine = SyncEngine(providers: [])
+    private var needsRefresh = false
+    private var gmailManagers: [UUID: GoogleTokenManager] = [:]
 
     private let accountStore = AccountStore()
     private let senderStore = PrioritySenderStore()
@@ -139,7 +144,10 @@ final class AppModel {
     }
 
     private func tokenManager(for accountID: UUID) -> GoogleTokenManager {
-        GoogleTokenManager(accountID: accountID, auth: GoogleAuth(config: AppConfig.googleOAuth), secrets: secrets)
+        if let manager = gmailManagers[accountID] { return manager }
+        let manager = GoogleTokenManager(accountID: accountID, auth: GoogleAuth(config: AppConfig.googleOAuth), secrets: secrets)
+        gmailManagers[accountID] = manager
+        return manager
     }
 
     private func makeProvider(_ account: MailAccount) -> any MailProvider {
@@ -153,13 +161,13 @@ final class AppModel {
     // MARK: Adding and removing accounts
 
     /// Google sign-in (read-only scope), then stores tokens in the Keychain.
-    func addGmailAccount() async throws {
+    func addGmailAccount(reconnecting account: MailAccount? = nil) async throws {
         let config = AppConfig.googleOAuth
         guard config.isConfigured else { throw AddAccountError.googleNotConfigured }
 
         let tokens = try await GoogleSignInFlow().signIn(config: config)
         let id = UUID()
-        let manager = tokenManager(for: id)
+        let manager = GoogleTokenManager(accountID: id, auth: GoogleAuth(config: config), secrets: secrets)
         try await manager.save(tokens)
 
         let email: String
@@ -167,16 +175,24 @@ final class AppModel {
             let probe = MailAccount(id: id, kind: .gmail, emailAddress: "", label: "Gmail", colorIndex: 0)
             email = try await GmailProvider(account: probe, tokens: manager).fetchEmailAddress()
         } catch {
-            await manager.signOut()
+            await manager.discardLocally()
             throw error
         }
+        await manager.discardLocally()
 
         let existing = usingDemoData ? [] : accounts
-        if existing.contains(where: { $0.emailAddress.caseInsensitiveCompare(email) == .orderedSame }) {
-            // Same Google grant as the existing account: don't revoke, just drop the duplicate copy.
-            await manager.discardLocally()
-            throw AddAccountError.duplicate(email)
+        if let account, account.emailAddress.caseInsensitiveCompare(email) != .orderedSame {
+            throw AddAccountError.wrongGmailAccount(expected: account.emailAddress, actual: email)
         }
+        if let match = existing.first(where: {
+            $0.kind == .gmail && $0.emailAddress.caseInsensitiveCompare(email) == .orderedSame
+        }) {
+            try await tokenManager(for: match.id).save(tokens)
+            errors[match.id] = nil
+            if isRefreshing { needsRefresh = true } else { await refresh() }
+            return
+        }
+        try await tokenManager(for: id).save(tokens)
 
         if usingDemoData { accounts = []; messages = [] }
         let gmailCount = existing.filter { $0.kind == .gmail }.count
@@ -247,7 +263,13 @@ final class AppModel {
     func refresh() async {
         guard !isRefreshing else { return }
         isRefreshing = true
-        defer { isRefreshing = false }
+        defer {
+            isRefreshing = false
+            if needsRefresh {
+                needsRefresh = false
+                Task { await refresh() }
+            }
+        }
         let result = await engine.refresh()
         errors = result.errors
         let gmail = accounts.filter { $0.kind == .gmail }
@@ -567,7 +589,7 @@ final class AppModel {
 
     /// Writes a draft reply on this device. If the AI model fails, falls back to a simple template.
     @discardableResult
-    func generateDraft(for message: MailMessage, body: String? = nil) async -> ReplyDraft? {
+    func generateDraft(for message: MailMessage, body: String? = nil, allowCloud: Bool = false) async -> ReplyDraft? {
         guard !isDraftingIDs.contains(message.id) else { return drafts[message.id] }
         isDraftingIDs.insert(message.id)
         defer { isDraftingIDs.remove(message.id) }
@@ -582,7 +604,9 @@ final class AppModel {
         // Cloud drafting only runs if the person switched it on and added their own key; the email
         // being replied to is then sent to Anthropic. Otherwise this stays on the phone.
         var services: [any AIService] = []
-        if let cloud = CloudDrafts.service(onDeviceAvailable: DraftAI.onDeviceAvailable) { services.append(cloud) }
+        if allowCloud, let cloud = CloudDrafts.service(onDeviceAvailable: DraftAI.onDeviceAvailable) {
+            services.append(cloud)
+        }
         services.append(ai)
         draftNotes[message.id] = nil
         var made: ReplyDraft?

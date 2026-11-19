@@ -177,7 +177,7 @@ struct SettingsView: View {
         } header: {
             Text("Reply drafts")
         } footer: {
-            Text("Drafts and your writing style are created and stored on this device only. Nothing is sent anywhere to write them, and a reply is only sent when you tap Send in the mail sheet.")
+            Text("Inbox Butler learns your writing style from recent Sent mail on this device. Quick drafts use that style. If you enable cloud drafts, you can request one from an open email. Review the draft before tapping Send in the mail sheet.")
         }
     }
 
