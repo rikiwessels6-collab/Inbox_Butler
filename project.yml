@@ -40,6 +40,7 @@ targets:
       path: InboxButler/Info.plist
       properties:
         CFBundleDisplayName: Inbox Butler
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSFaceIDUsageDescription: Inbox Butler can ask for Face ID before opening, to keep your mail private.
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
@@ -90,6 +91,7 @@ targets:
       path: InboxButlerWidget/Info.plist
       properties:
         CFBundleDisplayName: Inbox Butler
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

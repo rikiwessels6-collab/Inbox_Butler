@@ -81,6 +81,20 @@ jobs:
           echo "---- tail ----"; tail -n 15 archive.log
           exit $status
 
+      - name: Verify archived build number
+        env:
+          EXPECTED_BUILD: ${{ github.run_number }}
+        run: |
+          app="$RUNNER_TEMP/InboxButler.xcarchive/Products/Applications/InboxButler.app"
+          for plist in "$app/Info.plist" "$app/PlugIns/"*.appex/Info.plist; do
+            [ -f "$plist" ] || continue
+            actual=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")
+            if [ "$actual" != "$EXPECTED_BUILD" ]; then
+              echo "::error::Expected build $EXPECTED_BUILD, got $actual in $plist"
+              exit 1
+            fi
+          done
+
       - name: Export and upload to TestFlight
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
@@ -93,6 +107,7 @@ jobs:
             <key>teamID</key><string>${TEAM_ID}</string>
             <key>signingStyle</key><string>automatic</string>
             <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
           </dict>
           </plist>
           PLIST
