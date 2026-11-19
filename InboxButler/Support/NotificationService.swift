@@ -66,7 +66,7 @@ extension NotificationService {
     func scheduleMorningBrief() async {
         let content = UNMutableNotificationContent()
         content.title = "Inbox Butler"
-        content.body = "Open Today to check your appointments and what needs attention."
+        content.body = "Open your agenda for appointments and deadlines."
         content.sound = .default
         let trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: 8, minute: 0),
                                                      repeats: true)

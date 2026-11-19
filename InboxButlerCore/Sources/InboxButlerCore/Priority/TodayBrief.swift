@@ -3,7 +3,7 @@ import Foundation
 /// The "Today" card at the top of the inbox: what actually needs you, pulled together from the
 /// calendar, events found in email, and mail that wants action. Pure logic, no UI, so it is tested.
 public struct TodayBrief: Equatable, Sendable {
-    public enum Kind: String, Sendable { case allDay, event, clash, suggestion, security, bill, reply }
+    public enum Kind: String, Sendable { case allDay, event, clash, suggestion, security, bill, deadline, reply }
 
     public struct Item: Identifiable, Equatable, Sendable {
         public let id: String
@@ -55,7 +55,7 @@ public struct TodayBrief: Equatable, Sendable {
             .sorted(by: { $0.start < $1.start }).prefix(3) {
             let due = p.start.formatted(date: .abbreviated, time: p.isAllDay ? .omitted : .shortened)
             let evidence = p.evidence.map { " · " + $0 } ?? ""
-            items.append(Item(id: "due-\(p.id)", kind: .bill, title: p.title,
+            items.append(Item(id: "due-\(p.id)", kind: .deadline, title: p.title,
                               detail: "Due \(due)\(evidence)", messageID: p.sourceMessageID))
         }
 

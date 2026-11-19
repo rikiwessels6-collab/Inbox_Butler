@@ -59,7 +59,7 @@ struct TodayCard: View {
         case .clash: return "exclamationmark.2"
         case .suggestion: return "calendar.badge.plus"
         case .security: return "lock.shield"
-        case .bill: return "doc.text"
+        case .bill, .deadline: return "doc.text"
         case .reply: return "arrowshape.turn.up.left"
         }
     }
@@ -71,7 +71,7 @@ struct TodayCard: View {
         case .clash: return Theme.warn
         case .suggestion: return Theme.accent
         case .security: return Theme.warn
-        case .bill: return Theme.gold
+        case .bill, .deadline: return Theme.gold
         case .reply: return Theme.good
         }
     }

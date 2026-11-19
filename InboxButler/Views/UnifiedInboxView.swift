@@ -97,8 +97,8 @@ struct UnifiedInboxView: View {
 
     private var list: some View {
         List(selection: $selectedID) {
-            if sizeClass != .compact || model.usingDemoData {
-                header
+            if model.usingDemoData {
+                demoBanner
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
@@ -330,26 +330,6 @@ struct UnifiedInboxView: View {
         .accessibilityIdentifier("newsletter-bundle")
     }
 
-    /// Date, greeting, a one-line summary, the demo banner and (iPhone) filter chips.
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if sizeClass != .compact {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())
-                        .font(.caption.weight(.semibold)).tracking(0.8).foregroundStyle(Theme.muted)
-                    Text(greeting).font(.serif(.largeTitle)).foregroundStyle(Theme.ink)
-                    Text(summary).font(.subheadline).foregroundStyle(Theme.muted)
-                }
-            }
-
-            if model.usingDemoData { demoBanner }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     private var demoBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "sparkles").foregroundStyle(Theme.accent)
@@ -358,7 +338,7 @@ struct UnifiedInboxView: View {
                 Text("Connect an account to see your own.").font(.footnote).foregroundStyle(Theme.muted)
             }
             Spacer()
-            Button("Connect") { router.tab = .accounts }
+            Button("Connect") { router.openAccounts() }
                 .buttonStyle(PrimaryButtonStyle())
         }
         .card(padding: 14)
@@ -409,23 +389,6 @@ struct UnifiedInboxView: View {
         case .all, .priority, .other: return true
         default: return false
         }
-    }
-
-    private var greeting: String {
-        switch Calendar.current.component(.hour, from: Date()) {
-        case 5..<12: return "Good morning"
-        case 12..<18: return "Good afternoon"
-        default: return "Good evening"
-        }
-    }
-
-    private var summary: String {
-        let priority = unreadCount(.priority)
-        let reply = unreadCount(.needsReply)
-        var parts: [String] = []
-        if priority > 0 { parts.append("\(priority) important") }
-        if reply > 0 { parts.append("\(reply) need\(reply == 1 ? "s" : "") a reply") }
-        return parts.isEmpty ? "You're all caught up." : parts.joined(separator: " · ")
     }
 
     /// Important = a priority sender, something that needs you (security alert, invoice,
