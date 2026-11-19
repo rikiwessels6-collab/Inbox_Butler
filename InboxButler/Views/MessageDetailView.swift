@@ -6,6 +6,8 @@ import InboxButlerCore
 /// Everything is read and analysed on this device.
 struct MessageDetailView: View {
     @Environment(AppModel.self) private var model
+    @Environment(AppRouter.self) private var router
+    @Environment(\.openURL) private var openURL
     let message: MailMessage
     /// Called after Done / Remind so the list can close this message.
     var onTriage: (() -> Void)? = nil
@@ -27,10 +29,26 @@ struct MessageDetailView: View {
 
     private struct HTMLItem: Identifiable { let id = UUID(); let html: String }
 
+    private var gmailURL: URL? {
+        guard let account = model.account(for: message.accountID),
+              account.kind == .gmail, !model.usingDemoData else { return nil }
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "mail.google.com"
+        components.path = "/mail/"
+        components.queryItems = [URLQueryItem(name: "authuser", value: account.emailAddress)]
+        components.fragment = "all/" + (message.threadID ?? message.providerMessageID)
+        return components.url
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 header
+                if let gmailURL {
+                    Link(destination: gmailURL) { Label("Open original in Gmail", systemImage: "arrow.up.right.square") }
+                        .buttonStyle(.bordered)
+                }
                 messageBody
                 if !model.isFromMe(message) { replySection }
                 if !message.attachments.isEmpty { attachmentsSection }
@@ -79,6 +97,7 @@ struct MessageDetailView: View {
                          preferredFrom: model.account(for: message.accountID)?.emailAddress) { result in
                 showComposer = false
                 if result == .sent { model.discardDraft(for: message); replyText = "" }
+                if result == .failed { alertText = "Apple Mail couldn’t send this message. Your draft is still here." }
             }
             .ignoresSafeArea()
         }
@@ -142,7 +161,7 @@ struct MessageDetailView: View {
         Divider().overlay(Theme.hairline)
         if let analysis {
             if analysis.isPartial { partialBanner }
-            Text(String(analysis.body.prefix(4000)))
+            Text(analysis.body)
                 .font(.body)
                 .lineSpacing(5)
                 .foregroundStyle(Theme.ink)
@@ -164,8 +183,12 @@ struct MessageDetailView: View {
                 Text("Open the full email to read all of it.").font(.footnote).foregroundStyle(Theme.muted)
             }
             Spacer(minLength: 0)
-            Button("Open") { Task { await showFormatted() } }
-                .buttonStyle(SecondaryButtonStyle())
+            if gmailURL != nil, model.errors[message.accountID] != nil {
+                Button("Reconnect") { router.openAccounts() }.buttonStyle(SecondaryButtonStyle())
+            } else {
+                Button("Open") { Task { await showFormatted() } }
+                    .buttonStyle(SecondaryButtonStyle())
+            }
         }
         .card(padding: 12)
     }
@@ -209,11 +232,23 @@ struct MessageDetailView: View {
                     .padding(10)
                     .background(Theme.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .onChange(of: replyText) { _, new in model.saveDraftText(new, for: message) }
+                if let gmailURL {
+                    Button {
+                        UIPasteboard.general.string = replyText
+                        openURL(gmailURL)
+                    } label: {
+                        Label("Copy draft & open Gmail", systemImage: "doc.on.doc")
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Text("Tap Reply in Gmail and paste your draft into the original thread.")
+                        .font(.footnote).foregroundStyle(Theme.muted)
+                }
                 HStack(spacing: 10) {
                     Button {
                         if MailComposer.canSend { showComposer = true } else { showNoMailAlert = true }
                     } label: {
-                        Label("Review & send", systemImage: "paperplane")
+                        Label(gmailURL == nil ? "Review & send" : "Use Apple Mail", systemImage: "paperplane")
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -230,8 +265,10 @@ struct MessageDetailView: View {
                     }
                     .font(.subheadline)
                 }
-                Text("Edit the draft above. \"Review & send\" opens the mail sheet with it filled in: nothing is sent until you tap Send there.")
-                    .font(.footnote).foregroundStyle(Theme.muted)
+                if gmailURL == nil {
+                    Text("Review your draft in Apple Mail before sending.")
+                        .font(.footnote).foregroundStyle(Theme.muted)
+                }
             } else {
                 Button {
                     Task { await startDraft(replacing: false) }
