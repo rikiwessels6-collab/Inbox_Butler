@@ -69,7 +69,7 @@ struct UnifiedInboxView: View {
             Section {
                 ForEach(model.accounts) { account in
                     Label {
-                        Text(account.label)
+                        Text(account.displayLabel)
                     } icon: {
                         Image(systemName: account.kind.symbolName).foregroundStyle(account.badgeColor)
                     }
@@ -470,7 +470,7 @@ struct UnifiedInboxView: View {
         case .drafts: return "Drafts ready"
         case .reminders: return "Reminders"
         case .done: return "Done"
-        case .account(let id): return model.account(for: id)?.label ?? "Account"
+        case .account(let id): return model.account(for: id)?.displayLabel ?? "Account"
         case .split(let id): return model.splits.first(where: { $0.id == id })?.name ?? "Split"
         }
     }
@@ -638,7 +638,7 @@ struct MessageRow: View {
                 if showAccount, let account {
                     HStack(spacing: 4) {
                         Circle().fill(account.badgeColor).frame(width: 6, height: 6)
-                        Text(account.label).font(.caption2).foregroundStyle(Theme.muted)
+                        Text(account.displayLabel).font(.caption2).foregroundStyle(Theme.muted)
                     }
                 }
             }
