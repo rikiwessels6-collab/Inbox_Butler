@@ -19,11 +19,12 @@ public struct EventProposal: Identifiable, Hashable, Codable, Sendable {
     public var source: Source
     /// The sentence or file the event was read from (shown to the user).
     public var evidence: String?
+    public var isDeadline: Bool?
 
     public init(id: UUID = UUID(), sourceMessageID: String, title: String, start: Date,
                 end: Date? = nil, isAllDay: Bool = false, location: String? = nil,
                 notes: String? = nil, status: Status = .proposed,
-                source: Source = .messageText, evidence: String? = nil) {
+                source: Source = .messageText, evidence: String? = nil, isDeadline: Bool? = nil) {
         self.id = id
         self.sourceMessageID = sourceMessageID
         self.title = title
@@ -35,13 +36,14 @@ public struct EventProposal: Identifiable, Hashable, Codable, Sendable {
         self.status = status
         self.source = source
         self.evidence = evidence
+        self.isDeadline = isDeadline
     }
 
     /// Stable identity across re-scans (ids are random each time). Used so a
     /// dismissed or added event never comes back. Based on message + start time
     /// (not the title, which the user can edit).
     public var fingerprint: String {
-        "\(sourceMessageID)|\(Int(start.timeIntervalSince1970))|\(isAllDay ? "d" : "t")"
+        "\(sourceMessageID)|\(Int(start.timeIntervalSince1970))|\(isAllDay ? "d" : "t")" + (isDeadline == true ? "|deadline" : "")
     }
 }
 

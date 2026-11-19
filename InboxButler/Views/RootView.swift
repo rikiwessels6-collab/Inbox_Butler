@@ -1,13 +1,13 @@
 import SwiftUI
 
-enum AppTab: Hashable { case inbox, calendar, search, accounts, priority }
+enum AppTab: Hashable { case today, inbox, calendar, accounts, priority }
 
 /// Lets any screen switch tabs (e.g. the demo banner's "Connect an account").
 @Observable
 @MainActor
 final class AppRouter {
     static let shared = AppRouter()
-    var tab: AppTab = .inbox
+    var tab: AppTab = .today
     private init() {}
 }
 
@@ -28,15 +28,15 @@ struct RootView: View {
     var body: some View {
         ZStack {
             TabView(selection: $router.tab) {
+                TodayView()
+                    .tabItem { Label("Today", systemImage: "sun.max") }
+                    .tag(AppTab.today)
                 UnifiedInboxView()
                     .tabItem { Label("Inbox", systemImage: "tray.full") }
                     .tag(AppTab.inbox)
                 CalendarTabView()
                     .tabItem { Label("Calendar", systemImage: "calendar") }
                     .tag(AppTab.calendar)
-                SearchView()
-                    .tabItem { Label("Search", systemImage: "magnifyingglass") }
-                    .tag(AppTab.search)
                 AccountListView()
                     .tabItem { Label("Accounts", systemImage: "person.crop.circle") }
                     .tag(AppTab.accounts)

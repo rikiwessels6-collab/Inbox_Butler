@@ -23,6 +23,7 @@ struct UnifiedInboxView: View {
     @State private var todayEvents: [ExistingEvent] = []
     @State private var showMenu = false
     @State private var showSplits = false
+    @State private var showSearch = false
     @State private var showBrief = false
     @State private var confirmDoneAll = false
     @State private var composeNew = false
@@ -57,6 +58,7 @@ struct UnifiedInboxView: View {
                     row(split.name, "line.3.horizontal.decrease.circle", .split(split.id), unreadCount(.split(split.id)))
                 }
                 Button { showSplits = true } label: { Label("Edit splits", systemImage: "slider.horizontal.3") }
+                Button { showSearch = true } label: { Label("Search mail", systemImage: "magnifyingglass") }
             } header: {
                 Text("Your splits")
             }
@@ -141,6 +143,7 @@ struct UnifiedInboxView: View {
         .navigationBarBackButtonHidden(sizeClass == .compact)
         .safeAreaInset(edge: .bottom, spacing: 0) { if sizeClass == .compact { splitBar } }
         .searchable(text: $search, prompt: "Search all mail")
+        .sheet(isPresented: $showSearch) { SearchView() }
         .refreshable { await model.refresh(); await loadToday() }
         .task(id: model.calendarAccess) { await loadToday() }
         .animation(.snappy, value: filter)

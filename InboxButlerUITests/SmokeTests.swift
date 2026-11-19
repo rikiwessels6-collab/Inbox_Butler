@@ -38,6 +38,8 @@ final class SmokeTests: XCTestCase {
         let app = launchPastWelcome()
         XCTAssertTrue(app.tabBars.buttons["Inbox"].waitForExistence(timeout: 30), "App did not launch to the tab bar")
 
+        XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
+        app.tabBars.buttons["Inbox"].tap()
         // Demo mail is listed.
         XCTAssertTrue(text(app, containing: "Sam Rivera").waitForExistence(timeout: 30), "Demo inbox did not load")
 
@@ -51,6 +53,7 @@ final class SmokeTests: XCTestCase {
     func testOpeningAMessageFindsTheSuggestedEvent() {
         let app = launchPastWelcome()
         XCTAssertTrue(app.tabBars.buttons["Inbox"].waitForExistence(timeout: 30))
+        app.tabBars.buttons["Inbox"].tap()
         let row = text(app, containing: "Appointment confirmed")
         XCTAssertTrue(row.waitForExistence(timeout: 30), "Demo appointment email missing")
         row.tap()

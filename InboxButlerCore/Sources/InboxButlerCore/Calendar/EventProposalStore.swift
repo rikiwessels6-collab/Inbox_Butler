@@ -26,7 +26,7 @@ public struct EventProposalStore: Sendable {
     /// status (and any edits); new ones are added as `.proposed`. Returns the
     /// stored version of each proposal passed in, and marks the message scanned.
     @discardableResult
-    public func merge(_ found: [EventProposal], forMessage messageID: String) -> [EventProposal] {
+    public func merge(_ found: [EventProposal], forMessage messageID: String, completed: Bool = true) -> [EventProposal] {
         var file = read()
         var result: [EventProposal] = []
         for proposal in found {
@@ -37,7 +37,7 @@ public struct EventProposalStore: Sendable {
                 result.append(proposal)
             }
         }
-        if !file.scannedMessageIDs.contains(messageID) { file.scannedMessageIDs.append(messageID) }
+        if completed && !file.scannedMessageIDs.contains(messageID) { file.scannedMessageIDs.append(messageID) }
         write(file)
         return result
     }

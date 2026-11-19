@@ -7,6 +7,7 @@ public struct MessageAnalysis: Sendable {
     public var notes: [String]
     /// True when only the short preview could be loaded, not the full message text.
     public var isPartial: Bool = false
+    public var needsRetry: Bool = false
 }
 
 /// Reads a message's text and attachments ON-DEVICE and proposes events.
@@ -25,31 +26,50 @@ public struct MessageAnalyzer: Sendable {
         var notes: [String] = []
         var body: String
         var partial = false
+        var needsRetry = false
         do {
             body = try await provider.fetchBody(for: message)
             partial = body == message.snippet
         } catch {
+            needsRetry = true
             partial = true
             body = message.snippet
             notes.append("Couldn't load the full message: \(error.localizedDescription)")
         }
 
+        if let wording = DateEventExtractor.relativeDate(in: message.subject + "\n" + body) {
+            notes.append("Check the date described as “\(wording)” in this email.")
+        }
         var proposals = DateEventExtractor.events(in: message.subject + "\n" + body,
                                                   sourceMessageID: message.id, referenceDate: referenceDate)
 
-        for attachment in message.attachments.prefix(Self.maxAttachments) where attachment.kind != .other {
+        let supported = message.attachments.filter { $0.kind != .other }
+        if supported.count > Self.maxAttachments {
+            notes.append("Only the first \(Self.maxAttachments) supported attachments were scanned.")
+        }
+        for attachment in supported.prefix(Self.maxAttachments) {
             if attachment.byteCount > AttachmentTextExtractor.maxBytes {
                 notes.append("\(attachment.filename) is too large to scan.")
                 continue
             }
+            let data: Data
             do {
-                let data = try await provider.fetchAttachment(attachment, in: message)
+                data = try await provider.fetchAttachment(attachment, in: message)
+            } catch {
+                needsRetry = true
+                notes.append("Couldn't download \(attachment.filename). Inbox Butler will retry.")
+                continue
+            }
+            do {
                 if attachment.kind == .calendar {
                     proposals += ICSParser.events(from: String(decoding: data, as: UTF8.self),
                                                   sourceMessageID: message.id, referenceDate: referenceDate,
                                                   filename: attachment.filename)
                 } else {
                     let text = try await extractor.text(from: data, kind: attachment.kind, filename: attachment.filename)
+                    if let wording = DateEventExtractor.relativeDate(in: text) {
+                        notes.append("Check the date described as “\(wording)” in \(attachment.filename).")
+                    }
                     proposals += DateEventExtractor.events(in: text, sourceMessageID: message.id,
                                                            source: .attachmentText, fileLabel: attachment.filename,
                                                            referenceDate: referenceDate)
@@ -65,6 +85,6 @@ public struct MessageAnalyzer: Sendable {
             .sorted { ($0.source == .calendarFile ? 0 : 1) < ($1.source == .calendarFile ? 0 : 1) }
             .filter { seen.insert($0.fingerprint).inserted }
             .sorted { $0.start < $1.start }
-        return MessageAnalysis(body: body, proposals: unique, notes: notes, isPartial: partial)
+        return MessageAnalysis(body: body, proposals: unique, notes: notes, isPartial: partial, needsRetry: needsRetry)
     }
 }
