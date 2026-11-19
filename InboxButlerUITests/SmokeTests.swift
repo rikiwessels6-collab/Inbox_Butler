@@ -39,6 +39,9 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["Inbox"].waitForExistence(timeout: 30), "App did not launch to the tab bar")
 
         XCTAssertTrue(app.tabBars.buttons["Calendar"].isSelected)
+        app.buttons["Needs action"].tap()
+        XCTAssertTrue(app.navigationBars["Needs action"].waitForExistence(timeout: 10))
+        app.navigationBars["Needs action"].buttons["Done"].tap()
         app.tabBars.buttons["Inbox"].tap()
         // Demo mail is listed.
         XCTAssertTrue(text(app, containing: "Sam Rivera").waitForExistence(timeout: 30), "Demo inbox did not load")

@@ -4,6 +4,7 @@ import InboxButlerCore
 /// "Remind me": quick presets plus a date and time picker.
 struct ReminderSheet: View {
     let message: MailMessage
+    var suggestedDate: Date? = nil
     let onPick: (Date) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var custom = Date().addingTimeInterval(3 * 3_600)
@@ -19,6 +20,14 @@ struct ReminderSheet: View {
                     }
 
                     VStack(spacing: 0) {
+                        if let suggestedDate, suggestedDate > Date() {
+                            Button { pick(suggestedDate) } label: {
+                                row(icon: "clock", title: "Before the deadline",
+                                    detail: suggestedDate.formatted(.dateTime.weekday(.abbreviated).hour().minute()))
+                            }
+                            .buttonStyle(.plain)
+                            Divider().overlay(Theme.hairline).padding(.leading, 64)
+                        }
                         let presets = TriageLogic.availablePresets()
                         ForEach(Array(presets.enumerated()), id: \.element.id) { index, preset in
                             let date = TriageLogic.date(for: preset)

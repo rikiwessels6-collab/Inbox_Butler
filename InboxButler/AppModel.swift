@@ -560,7 +560,8 @@ final class AppModel {
             .filter { message in
                 let labeled = message.labels.contains { $0.name.caseInsensitiveCompare("Daily Brief") == .orderedSame
                     || $0.name.caseInsensitiveCompare("Daily-Brief") == .orderedSame }
-                return (labeled || isPriority(message)) && !isHidden(message) && !proposalStore.hasScanned(message.id)
+                return errors[message.accountID] == nil && (labeled || isPriority(message))
+                    && !isHidden(message) && !proposalStore.hasScanned(message.id)
             }
             .sorted {
                 let first = scanAttempts[$0.id] ?? .distantPast

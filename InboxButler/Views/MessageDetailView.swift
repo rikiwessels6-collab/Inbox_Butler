@@ -443,7 +443,7 @@ struct MessageDetailView: View {
 // MARK: - One suggested event
 
 /// A suggested event. You can fix the title and time, then Add or Dismiss.
-private struct EventProposalRow: View {
+struct EventProposalRow: View {
     @Environment(AppModel.self) private var model
     let original: EventProposal
     @State private var draft: EventProposal

@@ -44,7 +44,7 @@ public struct GmailProvider: MailProvider {
             .init(name: "fields", value: "messages/id")
         ])
         guard status == 200 else { throw MailProviderError.network("Gmail returned \(status) listing mail.") }
-        let ids = (try? JSONDecoder().decode(ListResponse.self, from: listData))?.messages?.map(\.id) ?? []
+        let ids = try JSONDecoder().decode(ListResponse.self, from: listData).messages?.map(\.id) ?? []
         let labelMap = await fetchLabelMap()
 
         // Fetch details 10 at a time to stay well inside Gmail's rate limits.

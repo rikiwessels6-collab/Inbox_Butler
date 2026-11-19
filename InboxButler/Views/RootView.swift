@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppTab: Hashable { case calendar, today, inbox, settings }
+enum AppTab: Hashable { case calendar, inbox, settings }
 
 /// Lets any screen switch tabs (e.g. the demo banner's "Connect an account").
 @Observable
@@ -9,8 +9,10 @@ final class AppRouter {
     static let shared = AppRouter()
     var tab: AppTab = .calendar
     var showsAccounts = false
+    var showsActions = false
 
     func openAccounts() {
+        showsActions = false
         tab = .settings
         showsAccounts = true
     }
@@ -37,9 +39,6 @@ struct RootView: View {
                 CalendarTabView()
                     .tabItem { Label("Calendar", systemImage: "calendar") }
                     .tag(AppTab.calendar)
-                TodayView()
-                    .tabItem { Label("Agenda", systemImage: "list.bullet.rectangle") }
-                    .tag(AppTab.today)
                 UnifiedInboxView()
                     .tabItem { Label("Inbox", systemImage: "tray") }
                     .tag(AppTab.inbox)

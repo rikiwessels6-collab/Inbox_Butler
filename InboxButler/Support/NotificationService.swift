@@ -66,7 +66,7 @@ extension NotificationService {
     func scheduleMorningBrief() async {
         let content = UNMutableNotificationContent()
         content.title = "Inbox Butler"
-        content.body = "Open your agenda for appointments and deadlines."
+        content.body = "Review deadlines and invites from your calendar."
         content.sound = .default
         let trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: 8, minute: 0),
                                                      repeats: true)
@@ -81,7 +81,10 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse) async {
         guard response.notification.request.identifier == NotificationService.briefID else { return }
-        await MainActor.run { AppRouter.shared.tab = .today }
+        await MainActor.run {
+            AppRouter.shared.tab = .calendar
+            AppRouter.shared.showsActions = true
+        }
         await AppModel.shared.refresh()
     }
 
