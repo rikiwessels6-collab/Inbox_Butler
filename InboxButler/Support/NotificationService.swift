@@ -57,22 +57,19 @@ extension NotificationService {
 }
 
 extension NotificationService {
-    private static let briefID = "morning-brief"
+    static let briefID = "morning-brief"
 
     func cancelMorningBrief() {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.briefID])
     }
 
-    /// Replaces the pending brief with one that fires once at `date`.
-    func scheduleMorningBrief(at date: Date, title: String, body: String) async {
-        let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: [Self.briefID])
+    func scheduleMorningBrief() async {
         let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
+        content.title = "Inbox Butler"
+        content.body = "Review deadlines and invites from your calendar."
         content.sound = .default
-        let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
-        let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: 8, minute: 0),
+                                                     repeats: true)
         try? await center.add(UNNotificationRequest(identifier: Self.briefID, content: content, trigger: trigger))
     }
 }
@@ -80,6 +77,16 @@ extension NotificationService {
 /// Without this, iOS hides notifications while the app is open.
 final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationDelegate()
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse) async {
+        guard response.notification.request.identifier == NotificationService.briefID else { return }
+        await MainActor.run {
+            AppRouter.shared.tab = .calendar
+            AppRouter.shared.showsActions = true
+        }
+        await AppModel.shared.refresh()
+    }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {

@@ -5,6 +5,7 @@ import InboxButlerCore
 /// found in your email shown as dashed suggestions. Read for display only.
 struct CalendarTabView: View {
     @Environment(AppModel.self) private var model
+    @Bindable private var router = AppRouter.shared
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @State private var weekStart = CalendarTabView.startOfWeek(Date())
@@ -17,8 +18,38 @@ struct CalendarTabView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if model.calendarAccess == .granted { content } else { permissionCard }
+            GeometryReader { geometry in
+                HStack(spacing: 0) {
+                    VStack(spacing: 0) {
+                        if geometry.size.width < 1100 {
+                            Button { router.showsActions = true } label: {
+                                Label("Needs action", systemImage: "checklist")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .buttonStyle(.bordered)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 6)
+                        }
+                        if model.calendarAccess == .granted { content } else { permissionCard }
+                    }
+                    if geometry.size.width >= 1100 {
+                        Divider()
+                        NeedsActionView(limit: 3).frame(width: 300)
+                    }
+                }
+            }
+            .sheet(isPresented: $router.showsActions) {
+                NavigationStack {
+                    NeedsActionView()
+                        .navigationTitle("Needs action")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { router.showsActions = false }
+                            }
+                        }
+                }
             }
             .background(Theme.background.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)

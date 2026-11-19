@@ -25,6 +25,11 @@ public struct MailAccount: Identifiable, Hashable, Codable, Sendable {
     public var emailAddress: String
     /// Short label shown in the account badge, e.g. "Work".
     public var label: String
+    /// Gmail addresses distinguish accounts that have the same provider.
+    public var displayLabel: String {
+        kind == .gmail && !emailAddress.isEmpty ? emailAddress : label
+    }
+
     /// Index into the app's badge colour palette.
     public var colorIndex: Int
 

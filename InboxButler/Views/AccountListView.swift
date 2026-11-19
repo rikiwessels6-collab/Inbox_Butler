@@ -4,6 +4,7 @@ import InboxButlerCore
 /// Connected accounts and the ways to add more.
 struct AccountListView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     @State private var isSigningIn = false
     @State private var message: String?
     @State private var pendingRemoval: MailAccount?
@@ -31,6 +32,7 @@ struct AccountListView: View {
             }
             .background(Theme.background.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .sheet(item: $imapSheet) { kind in AddIMAPAccountView(kind: kind) }
             .sheet(isPresented: $showGoogleHeadsUp) {
                 GoogleHeadsUpSheet { Task { await addGmail() } }
@@ -56,7 +58,7 @@ struct AccountListView: View {
 
     private var connectedSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: model.usingDemoData ? "Demo accounts (not real)" : "Connected")
+            SectionLabel(text: model.usingDemoData ? "Demo accounts (not real)" : "Mail accounts")
             VStack(spacing: 0) {
                 ForEach(Array(model.accounts.enumerated()), id: \.element.id) { index, account in
                     HStack(spacing: 14) {
@@ -72,6 +74,12 @@ struct AccountListView: View {
                             }
                         }
                         Spacer()
+                        if !model.usingDemoData && account.kind == .gmail {
+                            Button("Reconnect") { Task { await addGmail(reconnecting: account) } }
+                                .buttonStyle(.bordered)
+                                .disabled(isSigningIn)
+                                .accessibilityLabel("Reconnect \(account.emailAddress)")
+                        }
                         if !model.usingDemoData {
                             Menu {
                                 Button("Remove account", role: .destructive) { pendingRemoval = account }
@@ -147,11 +155,12 @@ struct AccountListView: View {
             .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func addGmail() async {
+    private func addGmail(reconnecting account: MailAccount? = nil) async {
+        guard !isSigningIn else { return }
         isSigningIn = true
         defer { isSigningIn = false }
         do {
-            try await model.addGmailAccount()
+            try await model.addGmailAccount(reconnecting: account)
         } catch let error as SignInError {
             if case .failed(let text) = error { message = text }   // cancelled = silent
         } catch {

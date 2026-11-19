@@ -3,7 +3,7 @@ import Foundation
 /// The "Today" card at the top of the inbox: what actually needs you, pulled together from the
 /// calendar, events found in email, and mail that wants action. Pure logic, no UI, so it is tested.
 public struct TodayBrief: Equatable, Sendable {
-    public enum Kind: String, Sendable { case allDay, event, clash, suggestion, security, bill, reply }
+    public enum Kind: String, Sendable { case allDay, event, clash, suggestion, security, bill, deadline, reply }
 
     public struct Item: Identifiable, Equatable, Sendable {
         public let id: String
@@ -51,11 +51,20 @@ public struct TodayBrief: Equatable, Sendable {
                               messageID: nil))
         }
 
+        for p in suggestions.filter({ $0.status == .proposed && $0.isDeadline == true })
+            .sorted(by: { $0.start < $1.start }).prefix(3) {
+            let due = p.start.formatted(date: .abbreviated, time: p.isAllDay ? .omitted : .shortened)
+            let evidence = p.evidence.map { " · " + $0 } ?? ""
+            items.append(Item(id: "due-\(p.id)", kind: .deadline, title: p.title,
+                              detail: "Due \(due)\(evidence)", messageID: p.sourceMessageID))
+        }
+
         // Events found in email that you haven't added yet (today and tomorrow).
         let horizon = calendar.date(byAdding: .day, value: 2, to: dayStart) ?? dayEnd
-        for p in suggestions.filter({ $0.status == .proposed && $0.start >= dayStart && $0.start < horizon })
+        for p in suggestions.filter({ $0.status == .proposed && $0.isDeadline != true && $0.start >= dayStart && $0.start < horizon })
             .sorted(by: { $0.start < $1.start }).prefix(2) {
-            let when = p.isAllDay ? "all day" : time(p.start)
+            let date = calendar.isDate(p.start, inSameDayAs: now) ? "Today" : "Tomorrow"
+            let when = p.isAllDay ? date : "\(date), \(time(p.start))"
             items.append(Item(id: "suggest-\(p.id)", kind: .suggestion, title: p.title,
                               detail: "Found in an email · \(when). Not in your calendar yet", messageID: p.sourceMessageID))
         }

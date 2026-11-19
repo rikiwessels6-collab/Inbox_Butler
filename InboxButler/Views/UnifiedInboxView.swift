@@ -23,6 +23,7 @@ struct UnifiedInboxView: View {
     @State private var todayEvents: [ExistingEvent] = []
     @State private var showMenu = false
     @State private var showSplits = false
+    @State private var showSearch = false
     @State private var showBrief = false
     @State private var confirmDoneAll = false
     @State private var composeNew = false
@@ -57,6 +58,7 @@ struct UnifiedInboxView: View {
                     row(split.name, "line.3.horizontal.decrease.circle", .split(split.id), unreadCount(.split(split.id)))
                 }
                 Button { showSplits = true } label: { Label("Edit splits", systemImage: "slider.horizontal.3") }
+                Button { showSearch = true } label: { Label("Search mail", systemImage: "magnifyingglass") }
             } header: {
                 Text("Your splits")
             }
@@ -67,7 +69,7 @@ struct UnifiedInboxView: View {
             Section {
                 ForEach(model.accounts) { account in
                     Label {
-                        Text(account.label)
+                        Text(account.displayLabel)
                     } icon: {
                         Image(systemName: account.kind.symbolName).foregroundStyle(account.badgeColor)
                     }
@@ -95,8 +97,8 @@ struct UnifiedInboxView: View {
 
     private var list: some View {
         List(selection: $selectedID) {
-            if sizeClass != .compact || model.usingDemoData {
-                header
+            if model.usingDemoData {
+                demoBanner
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
@@ -141,6 +143,7 @@ struct UnifiedInboxView: View {
         .navigationBarBackButtonHidden(sizeClass == .compact)
         .safeAreaInset(edge: .bottom, spacing: 0) { if sizeClass == .compact { splitBar } }
         .searchable(text: $search, prompt: "Search all mail")
+        .sheet(isPresented: $showSearch) { SearchView() }
         .refreshable { await model.refresh(); await loadToday() }
         .task(id: model.calendarAccess) { await loadToday() }
         .animation(.snappy, value: filter)
@@ -327,26 +330,6 @@ struct UnifiedInboxView: View {
         .accessibilityIdentifier("newsletter-bundle")
     }
 
-    /// Date, greeting, a one-line summary, the demo banner and (iPhone) filter chips.
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if sizeClass != .compact {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())
-                        .font(.caption.weight(.semibold)).tracking(0.8).foregroundStyle(Theme.muted)
-                    Text(greeting).font(.serif(.largeTitle)).foregroundStyle(Theme.ink)
-                    Text(summary).font(.subheadline).foregroundStyle(Theme.muted)
-                }
-            }
-
-            if model.usingDemoData { demoBanner }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     private var demoBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "sparkles").foregroundStyle(Theme.accent)
@@ -355,7 +338,7 @@ struct UnifiedInboxView: View {
                 Text("Connect an account to see your own.").font(.footnote).foregroundStyle(Theme.muted)
             }
             Spacer()
-            Button("Connect") { router.tab = .accounts }
+            Button("Connect") { router.openAccounts() }
                 .buttonStyle(PrimaryButtonStyle())
         }
         .card(padding: 14)
@@ -408,23 +391,6 @@ struct UnifiedInboxView: View {
         }
     }
 
-    private var greeting: String {
-        switch Calendar.current.component(.hour, from: Date()) {
-        case 5..<12: return "Good morning"
-        case 12..<18: return "Good afternoon"
-        default: return "Good evening"
-        }
-    }
-
-    private var summary: String {
-        let priority = unreadCount(.priority)
-        let reply = unreadCount(.needsReply)
-        var parts: [String] = []
-        if priority > 0 { parts.append("\(priority) important") }
-        if reply > 0 { parts.append("\(reply) need\(reply == 1 ? "s" : "") a reply") }
-        return parts.isEmpty ? "You're all caught up." : parts.joined(separator: " · ")
-    }
-
     /// Important = a priority sender, something that needs you (security alert, invoice,
     /// appointment, an unanswered reply), or mail the scorer rates highly.
     private func isImportant(_ m: MailMessage) -> Bool {
@@ -467,7 +433,7 @@ struct UnifiedInboxView: View {
         case .drafts: return "Drafts ready"
         case .reminders: return "Reminders"
         case .done: return "Done"
-        case .account(let id): return model.account(for: id)?.label ?? "Account"
+        case .account(let id): return model.account(for: id)?.displayLabel ?? "Account"
         case .split(let id): return model.splits.first(where: { $0.id == id })?.name ?? "Split"
         }
     }
@@ -635,7 +601,7 @@ struct MessageRow: View {
                 if showAccount, let account {
                     HStack(spacing: 4) {
                         Circle().fill(account.badgeColor).frame(width: 6, height: 6)
-                        Text(account.label).font(.caption2).foregroundStyle(Theme.muted)
+                        Text(account.displayLabel).font(.caption2).foregroundStyle(Theme.muted)
                     }
                 }
             }

@@ -1,17 +1,25 @@
 import SwiftUI
 
-enum AppTab: Hashable { case inbox, calendar, search, accounts, priority }
+enum AppTab: Hashable { case calendar, inbox, settings }
 
 /// Lets any screen switch tabs (e.g. the demo banner's "Connect an account").
 @Observable
 @MainActor
 final class AppRouter {
     static let shared = AppRouter()
-    var tab: AppTab = .inbox
+    var tab: AppTab = .calendar
+    var showsAccounts = false
+    var showsActions = false
+
+    func openAccounts() {
+        showsActions = false
+        tab = .settings
+        showsAccounts = true
+    }
     private init() {}
 }
 
-/// Tab layout: inbox, accounts, priority and settings. Covered by a lock screen
+/// Main navigation and onboarding. Covered by a lock screen
 /// when the optional Face ID lock is on.
 struct RootView: View {
     @Environment(\.scenePhase) private var phase
@@ -28,21 +36,15 @@ struct RootView: View {
     var body: some View {
         ZStack {
             TabView(selection: $router.tab) {
-                UnifiedInboxView()
-                    .tabItem { Label("Inbox", systemImage: "tray.full") }
-                    .tag(AppTab.inbox)
                 CalendarTabView()
                     .tabItem { Label("Calendar", systemImage: "calendar") }
                     .tag(AppTab.calendar)
-                SearchView()
-                    .tabItem { Label("Search", systemImage: "magnifyingglass") }
-                    .tag(AppTab.search)
-                AccountListView()
-                    .tabItem { Label("Accounts", systemImage: "person.crop.circle") }
-                    .tag(AppTab.accounts)
+                UnifiedInboxView()
+                    .tabItem { Label("Inbox", systemImage: "tray") }
+                    .tag(AppTab.inbox)
                 SettingsView()
-                    .tabItem { Label("Priority", systemImage: "star.circle") }
-                    .tag(AppTab.priority)
+                    .tabItem { Label("Settings", systemImage: "gearshape") }
+                    .tag(AppTab.settings)
             }
             // While a full-screen overlay (welcome, tour, lock) is on top, the app underneath must
             // not be reachable by VoiceOver or other assistive tools.

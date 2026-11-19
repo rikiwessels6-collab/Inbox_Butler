@@ -99,7 +99,7 @@ extension WidgetSnapshot {
                              accountLabel: labels[$0.accountID] ?? "",
                              isPriority: isPriority($0), receivedAt: $0.receivedAt) }
         let today = events
-            .filter { $0.status != .dismissed && calendar.isDate($0.start, inSameDayAs: now) }
+            .filter { $0.status != .dismissed && $0.isDeadline != true && calendar.isDate($0.start, inSameDayAs: now) }
             .sorted { $0.start < $1.start }
             .map { EventItem(id: $0.id.uuidString, title: redact ? "Event" : $0.title, start: $0.start) }
         return WidgetSnapshot(urgentEmails: Array(urgent), todaysEvents: today,

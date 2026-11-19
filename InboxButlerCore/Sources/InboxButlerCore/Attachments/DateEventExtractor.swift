@@ -21,10 +21,12 @@ public enum DateEventExtractor {
             var duration = match.duration
             let matched = ns.substring(with: match.range)
 
+            guard relativeDate(in: matched) == nil else { continue }
+            let isDeadline = isDeadlinePhrase(matched, before: ns.substring(to: match.range.location))
             // Deadline phrases ("due 26 Nov", "reply by Friday", "until 5pm Monday") come back
             // from the detector as a range that STARTS NOW and ends on the deadline.
             // The deadline is the end of that range, so use it as the date.
-            if duration > 0 && Self.isDeadlinePhrase(matched, before: ns.substring(to: match.range.location)) {
+            if duration > 0 && isDeadline {
                 date = date.addingTimeInterval(duration)
                 duration = 0
             }
@@ -37,11 +39,18 @@ public enum DateEventExtractor {
             let evidence = fileLabel.map { "\($0): \(sentence)" } ?? sentence
 
             let proposal = EventProposal(sourceMessageID: sourceMessageID, title: sentence, start: date, end: end,
-                                         isAllDay: !hasTime, source: source, evidence: evidence)
+                                         isAllDay: !hasTime, source: source, evidence: evidence,
+                                         isDeadline: isDeadline ? true : nil)
             if seen.insert(proposal.fingerprint).inserted { out.append(proposal) }
             if out.count >= maxEvents { break }
         }
         return out
+    }
+
+    static func relativeDate(in text: String) -> String? {
+        let pattern = #"\b(?:tomorrow|today|tonight|next\s+(?:week|month|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)|(?:in|within)\s+\d+\s+(?:(?:business|working)\s+)?days?)\b"#
+        return text.range(of: pattern, options: [.regularExpression, .caseInsensitive])
+            .map { String(text[$0]) }
     }
 
     private static let deadlineWords = "(due|by|before|until|till|through|thru|deadline)"

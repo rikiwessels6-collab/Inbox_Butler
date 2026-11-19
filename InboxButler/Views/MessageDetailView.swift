@@ -248,7 +248,7 @@ struct MessageDetailView: View {
 
     private func startDraft(replacing: Bool) async {
         if replacing { model.discardDraft(for: message) }
-        await model.generateDraft(for: message, body: analysis?.body)
+        await model.generateDraft(for: message, body: analysis?.body, allowCloud: true)
         replyText = model.draft(for: message)?.body ?? ""
     }
 
@@ -293,7 +293,19 @@ struct MessageDetailView: View {
 
     @ViewBuilder
     private var eventsSection: some View {
-        let visible = proposals.filter { $0.status != .dismissed }
+        let deadlines = proposals.filter { $0.status == .proposed && $0.isDeadline == true }
+        if !deadlines.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionLabel(text: "Deadlines")
+                ForEach(deadlines) { proposal in
+                    Text(proposal.start.formatted(date: .abbreviated, time: proposal.isAllDay ? .omitted : .shortened))
+                        .font(.subheadline.weight(.semibold))
+                    Text(proposal.evidence ?? proposal.title).font(.footnote)
+                    Button("Set reminder") { showReminder = true }
+                }
+            }
+        }
+        let visible = proposals.filter { $0.status != .dismissed && $0.isDeadline != true }
         if !visible.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 SectionLabel(text: "Suggested events")
@@ -371,7 +383,7 @@ struct MessageDetailView: View {
         isAddingAll = true
         defer { isAddingAll = false }
         var added = 0, alreadyThere = 0
-        for i in proposals.indices where proposals[i].status == .proposed {
+        for i in proposals.indices where proposals[i].status == .proposed && proposals[i].isDeadline != true {
             do {
                 // An exact duplicate (same title and time) is already in the calendar: don't double it.
                 if await model.overlap(for: proposals[i]).duplicate != nil {
@@ -431,7 +443,7 @@ struct MessageDetailView: View {
 // MARK: - One suggested event
 
 /// A suggested event. You can fix the title and time, then Add or Dismiss.
-private struct EventProposalRow: View {
+struct EventProposalRow: View {
     @Environment(AppModel.self) private var model
     let original: EventProposal
     @State private var draft: EventProposal

@@ -229,7 +229,7 @@ struct WelcomeView: View {
                 .accessibilityIdentifier("welcome-icloud")
 
             Button {
-                AppRouter.shared.tab = .accounts
+                AppRouter.shared.openAccounts()
                 onFinish()
             } label: {
                 Text("Outlook and other accounts")

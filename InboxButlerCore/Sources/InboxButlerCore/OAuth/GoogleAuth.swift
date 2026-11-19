@@ -57,7 +57,7 @@ public struct GoogleAuth: Sendable {
             .init(name: "code_challenge_method", value: "S256"),
             .init(name: "state", value: state),
             .init(name: "access_type", value: "offline"),   // we need a refresh token
-            .init(name: "prompt", value: "consent")          // always return one
+            .init(name: "prompt", value: "select_account consent") // choose the mailbox and request a refresh token
         ]
         return c.url!
     }
@@ -152,8 +152,14 @@ public actor GoogleTokenManager {
     public func accessToken(forceRefresh: Bool = false) async throws -> String {
         guard var tokens = try load() else { throw MailProviderError.notAuthorized }
         if forceRefresh || tokens.expiresAt.timeIntervalSinceNow < 60 {
-            tokens = try await auth.refresh(tokens)
-            try save(tokens)
+            let original = tokens
+            let refreshed = try await auth.refresh(original)
+            guard let current = try load() else { throw MailProviderError.notAuthorized }
+            // Reconnecting can replace the grant while the refresh request is in flight.
+            guard current.refreshToken == original.refreshToken,
+                  current.accessToken == original.accessToken else { return current.accessToken }
+            try save(refreshed)
+            tokens = refreshed
         }
         return tokens.accessToken
     }

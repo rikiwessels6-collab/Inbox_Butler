@@ -6,6 +6,7 @@ import InboxButlerCore
 /// senders produces a notification.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @Bindable private var router = AppRouter.shared
     @State private var newSender = ""
     @State private var invalidInput = false
     @State private var status: UNAuthorizationStatus = .notDetermined
@@ -25,15 +26,26 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                Button { router.openAccounts() } label: {
+                    Label("Mail accounts", systemImage: "envelope")
+                }
                 prioritySection
                 if !model.suggestions.isEmpty { suggestionsSection }
                 draftingSection
-                cloudDraftsSection
+                Section {
+                    NavigationLink("Cloud drafting") {
+                        List { cloudDraftsSection }
+                            .navigationTitle("Cloud drafting")
+                    }
+                }
                 notificationsSection
                 calendarSection
                 privacySection
             }
-            .navigationTitle("Priority & settings")
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
+            .navigationTitle("Settings")
+            .sheet(isPresented: $router.showsAccounts) { AccountListView() }
             .scrollContentBackground(.hidden)
             .background(Theme.background.ignoresSafeArea())
             .task { await reloadStatus(); writer = model.writerProfile }
@@ -81,7 +93,7 @@ struct SettingsView: View {
                     .font(.footnote).foregroundStyle(Theme.muted)
             }
         } header: {
-            Text("Better drafts on any phone (optional)")
+            Text("Anthropic")
         } footer: {
             Text("Off by default. When on, tapping Draft a reply sends only that one email, plus a short summary of how you write, to Anthropic (the company behind Claude) over a secure connection to write the draft. Nothing is sent until you tap, and nothing is ever sent as an email without you tapping Send. You pay Anthropic directly for what you use. Your key stays in this phone's Keychain.")
         }
@@ -177,7 +189,7 @@ struct SettingsView: View {
         } header: {
             Text("Reply drafts")
         } footer: {
-            Text("Drafts and your writing style are created and stored on this device only. Nothing is sent anywhere to write them, and a reply is only sent when you tap Send in the mail sheet.")
+            Text("Inbox Butler learns your writing style from recent Sent mail on this device. Quick drafts use that style. If you enable cloud drafts, you can request one from an open email. Review the draft before tapping Send in the mail sheet.")
         }
     }
 

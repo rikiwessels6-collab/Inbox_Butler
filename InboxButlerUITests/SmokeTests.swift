@@ -38,19 +38,26 @@ final class SmokeTests: XCTestCase {
         let app = launchPastWelcome()
         XCTAssertTrue(app.tabBars.buttons["Inbox"].waitForExistence(timeout: 30), "App did not launch to the tab bar")
 
+        XCTAssertTrue(app.tabBars.buttons["Calendar"].isSelected)
+        app.buttons["Needs action"].tap()
+        XCTAssertTrue(app.navigationBars["Needs action"].waitForExistence(timeout: 10))
+        app.navigationBars["Needs action"].buttons["Done"].tap()
+        app.tabBars.buttons["Inbox"].tap()
         // Demo mail is listed.
         XCTAssertTrue(text(app, containing: "Sam Rivera").waitForExistence(timeout: 30), "Demo inbox did not load")
 
-        app.tabBars.buttons["Accounts"].tap()
+        app.tabBars.buttons["Settings"].tap()
+        app.buttons["Mail accounts"].tap()
         XCTAssertTrue(text(app, containing: "demo accounts").waitForExistence(timeout: 10))
 
-        app.tabBars.buttons["Priority"].tap()
+        app.buttons["Done"].tap()
         XCTAssertTrue(text(app, containing: "priority senders").waitForExistence(timeout: 10))
     }
 
     func testOpeningAMessageFindsTheSuggestedEvent() {
         let app = launchPastWelcome()
         XCTAssertTrue(app.tabBars.buttons["Inbox"].waitForExistence(timeout: 30))
+        app.tabBars.buttons["Inbox"].tap()
         let row = text(app, containing: "Appointment confirmed")
         XCTAssertTrue(row.waitForExistence(timeout: 30), "Demo appointment email missing")
         row.tap()

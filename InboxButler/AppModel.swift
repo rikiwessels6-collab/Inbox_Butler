@@ -13,12 +13,15 @@ struct UndoToast: Identifiable, Equatable {
 enum AddAccountError: LocalizedError {
     case googleNotConfigured
     case duplicate(String)
+    case wrongGmailAccount(expected: String, actual: String)
     var errorDescription: String? {
         switch self {
         case .googleNotConfigured:
             return "Google sign-in isn't set up yet. Add your client ID in AppConfig.swift (see docs/SETUP_GOOGLE.md)."
         case .duplicate(let email):
             return "\(email) is already connected."
+        case .wrongGmailAccount(let expected, let actual):
+            return "You selected \(actual). Sign in with \(expected) to reconnect this account."
         }
     }
 }
@@ -68,10 +71,16 @@ final class AppModel {
     private(set) var messages: [MailMessage] = []
     private(set) var errors: [UUID: String] = [:]
     private(set) var isRefreshing = false
+    private(set) var lastGmailCheck = UserDefaults.standard.object(forKey: "lastGmailCheck") as? Date
+    private(set) var briefRevision = 0
+    private(set) var scanWarnings = UserDefaults.standard.dictionary(forKey: "briefScanWarnings") as? [String: [String]] ?? [:]
+    private var scanAttempts: [String: Date] = [:]
     /// True while showing fake demo mail (no real account connected).
     private(set) var usingDemoData = false
 
     private var engine = SyncEngine(providers: [])
+    private var needsRefresh = false
+    private var gmailManagers: [UUID: GoogleTokenManager] = [:]
 
     private let accountStore = AccountStore()
     private let senderStore = PrioritySenderStore()
@@ -135,7 +144,10 @@ final class AppModel {
     }
 
     private func tokenManager(for accountID: UUID) -> GoogleTokenManager {
-        GoogleTokenManager(accountID: accountID, auth: GoogleAuth(config: AppConfig.googleOAuth), secrets: secrets)
+        if let manager = gmailManagers[accountID] { return manager }
+        let manager = GoogleTokenManager(accountID: accountID, auth: GoogleAuth(config: AppConfig.googleOAuth), secrets: secrets)
+        gmailManagers[accountID] = manager
+        return manager
     }
 
     private func makeProvider(_ account: MailAccount) -> any MailProvider {
@@ -149,13 +161,13 @@ final class AppModel {
     // MARK: Adding and removing accounts
 
     /// Google sign-in (read-only scope), then stores tokens in the Keychain.
-    func addGmailAccount() async throws {
+    func addGmailAccount(reconnecting account: MailAccount? = nil) async throws {
         let config = AppConfig.googleOAuth
         guard config.isConfigured else { throw AddAccountError.googleNotConfigured }
 
         let tokens = try await GoogleSignInFlow().signIn(config: config)
         let id = UUID()
-        let manager = tokenManager(for: id)
+        let manager = GoogleTokenManager(accountID: id, auth: GoogleAuth(config: config), secrets: secrets)
         try await manager.save(tokens)
 
         let email: String
@@ -163,16 +175,24 @@ final class AppModel {
             let probe = MailAccount(id: id, kind: .gmail, emailAddress: "", label: "Gmail", colorIndex: 0)
             email = try await GmailProvider(account: probe, tokens: manager).fetchEmailAddress()
         } catch {
-            await manager.signOut()
+            await manager.discardLocally()
             throw error
         }
+        await manager.discardLocally()
 
         let existing = usingDemoData ? [] : accounts
-        if existing.contains(where: { $0.emailAddress.caseInsensitiveCompare(email) == .orderedSame }) {
-            // Same Google grant as the existing account: don't revoke, just drop the duplicate copy.
-            await manager.discardLocally()
-            throw AddAccountError.duplicate(email)
+        if let account, account.emailAddress.caseInsensitiveCompare(email) != .orderedSame {
+            throw AddAccountError.wrongGmailAccount(expected: account.emailAddress, actual: email)
         }
+        if let match = existing.first(where: {
+            $0.kind == .gmail && $0.emailAddress.caseInsensitiveCompare(email) == .orderedSame
+        }) {
+            try await tokenManager(for: match.id).save(tokens)
+            errors[match.id] = nil
+            if isRefreshing { needsRefresh = true } else { await refresh() }
+            return
+        }
+        try await tokenManager(for: id).save(tokens)
 
         if usingDemoData { accounts = []; messages = [] }
         let gmailCount = existing.filter { $0.kind == .gmail }.count
@@ -241,10 +261,22 @@ final class AppModel {
     // MARK: Sync
 
     func refresh() async {
+        guard !isRefreshing else { return }
         isRefreshing = true
-        defer { isRefreshing = false }
+        defer {
+            isRefreshing = false
+            if needsRefresh {
+                needsRefresh = false
+                Task { await refresh() }
+            }
+        }
         let result = await engine.refresh()
         errors = result.errors
+        let gmail = accounts.filter { $0.kind == .gmail }
+        if !gmail.isEmpty && gmail.allSatisfy({ errors[$0.id] == nil }) {
+            lastGmailCheck = Date()
+            UserDefaults.standard.set(lastGmailCheck, forKey: "lastGmailCheck")
+        }
         if !result.sent.isEmpty { sent = result.sent }
         if usingDemoData {
             messages = result.messages
@@ -409,7 +441,13 @@ final class AppModel {
         guard let provider = providerByAccount[message.accountID] else { return nil }
         var result = await analyzer.analyze(message, provider: provider)
         if !usingDemoData {
-            result.proposals = proposalStore.merge(result.proposals, forMessage: message.id)
+            result.proposals = proposalStore.merge(result.proposals, forMessage: message.id,
+                                                   completed: !result.needsRetry)
+            var warnings = result.notes
+            if result.isPartial && warnings.isEmpty { warnings = ["Only the email preview was available."] }
+            scanWarnings[message.id] = warnings.isEmpty ? nil : warnings
+            UserDefaults.standard.set(scanWarnings, forKey: "briefScanWarnings")
+            briefRevision += 1
             publishWidgetSnapshot()
         }
         return result
@@ -437,7 +475,16 @@ final class AppModel {
     /// Events found in email that you haven't added or dismissed yet.
     func suggestedEvents(from start: Date, to end: Date) -> [EventProposal] {
         guard !usingDemoData else { return [] }
-        return proposalStore.all().filter { $0.status == .proposed && $0.start >= start && $0.start < end }
+        return proposalStore.all().filter { $0.status == .proposed && $0.isDeadline != true && $0.start >= start && $0.start < end }
+    }
+
+    func briefingSuggestions(from start: Date, to end: Date) -> [EventProposal] {
+        _ = briefRevision
+        let visible = Set(inboxMessages.map(\.id))
+        return proposalStore.all().filter {
+            $0.status == .proposed && $0.start < end && visible.contains($0.sourceMessageID)
+                && ($0.isDeadline == true || $0.start >= start)
+        }
     }
 
     /// Overlaps and "already added?" hints. Informational only: they never block an add.
@@ -460,6 +507,7 @@ final class AppModel {
         done.status = .confirmed
         if !usingDemoData {
             proposalStore.update(done, replacing: original.fingerprint)
+            briefRevision += 1
             publishWidgetSnapshot()
         }
         return done
@@ -499,18 +547,33 @@ final class AppModel {
         dismissed.status = .dismissed
         if !usingDemoData {
             proposalStore.update(dismissed)
+            briefRevision += 1
             publishWidgetSnapshot()
         }
     }
 
-    /// Scans new mail from priority senders (max 5 per refresh) so today's events
-    /// reach the widget without opening each message. Everything stays on-device.
+    /// Work through older items first, including read messages. Failed downloads
+    /// remain eligible but move behind items that have not been attempted yet.
     private func scanPriorityMailForEvents() async {
         guard !usingDemoData else { return }
         let candidates = messages
-            .filter { !$0.isRead && isPriority($0) && !proposalStore.hasScanned($0.id) }
+            .filter { message in
+                let labeled = message.labels.contains { $0.name.caseInsensitiveCompare("Daily Brief") == .orderedSame
+                    || $0.name.caseInsensitiveCompare("Daily-Brief") == .orderedSame }
+                return errors[message.accountID] == nil && (labeled || isPriority(message))
+                    && !isHidden(message) && !proposalStore.hasScanned(message.id)
+            }
+            .sorted {
+                let first = scanAttempts[$0.id] ?? .distantPast
+                let second = scanAttempts[$1.id] ?? .distantPast
+                return first == second ? $0.receivedAt < $1.receivedAt : first < second
+            }
             .prefix(5)
-        for message in candidates { _ = await analysis(for: message) }
+        for message in candidates {
+            guard !Task.isCancelled else { break }
+            scanAttempts[message.id] = Date()
+            _ = await analysis(for: message)
+        }
     }
 
     // MARK: Reply drafts
@@ -527,7 +590,7 @@ final class AppModel {
 
     /// Writes a draft reply on this device. If the AI model fails, falls back to a simple template.
     @discardableResult
-    func generateDraft(for message: MailMessage, body: String? = nil) async -> ReplyDraft? {
+    func generateDraft(for message: MailMessage, body: String? = nil, allowCloud: Bool = false) async -> ReplyDraft? {
         guard !isDraftingIDs.contains(message.id) else { return drafts[message.id] }
         isDraftingIDs.insert(message.id)
         defer { isDraftingIDs.remove(message.id) }
@@ -542,7 +605,9 @@ final class AppModel {
         // Cloud drafting only runs if the person switched it on and added their own key; the email
         // being replied to is then sent to Anthropic. Otherwise this stays on the phone.
         var services: [any AIService] = []
-        if let cloud = CloudDrafts.service(onDeviceAvailable: DraftAI.onDeviceAvailable) { services.append(cloud) }
+        if allowCloud, let cloud = CloudDrafts.service(onDeviceAvailable: DraftAI.onDeviceAvailable) {
+            services.append(cloud)
+        }
         services.append(ai)
         draftNotes[message.id] = nil
         var made: ReplyDraft?
@@ -679,23 +744,13 @@ final class AppModel {
         notifiedStore.add(plan.map(\.id))
     }
 
-    /// Schedules (or cancels) the optional 8am summary. Its text is a snapshot from the
-    /// last refresh, so it can be slightly stale if the app hasn't updated overnight.
+    /// A repeating morning shortcut opens the current brief and triggers a refresh.
     func rescheduleBrief() async {
         guard AppSettings.bool(AppSettings.briefKey, default: false), await notifier.status() == .authorized else {
             notifier.cancelMorningBrief()
             return
         }
-        let calendar = Calendar.current
-        guard let next = calendar.nextDate(after: Date(), matching: DateComponents(hour: 8, minute: 0),
-                                           matchingPolicy: .nextTime) else { return }
-        let events = usingDemoData ? [] : proposalStore.all().filter {
-            $0.status != .dismissed && calendar.isDate($0.start, inSameDayAs: next)
-        }
-        let text = MorningBrief.text(priorityUnread: inboxMessages.filter { !$0.isRead && isPriority($0) }.count,
-                                     needsReply: inboxMessages.filter(\.awaitingReply).count,
-                                     eventsToday: events.count)
-        await notifier.scheduleMorningBrief(at: next, title: text.title, body: text.body)
+        await notifier.scheduleMorningBrief()
     }
 
     func notificationStatus() async -> UNAuthorizationStatus { await notifier.status() }
